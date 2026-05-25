@@ -288,6 +288,41 @@ app.post("/api/verify", async (req, res) => {
   });
 });
 
+// Root landing page
+app.get("/", (req, res) => {
+  res.send(`
+    <html>
+      <head>
+        <title>🔐 ZK SSI Network API</title>
+        <style>
+          body { font-family: -apple-system, sans-serif; background: #faf9f6; padding: 3rem; color: #1e1b18; line-height: 1.6; }
+          .container { max-width: 600px; margin: 0 auto; background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.08); }
+          h1 { color: #ea580c; font-size: 1.5rem; margin-top: 0; }
+          .status { display: inline-block; padding: 4px 12px; background: #d1fae5; color: #065f46; border-radius: 99px; font-size: 0.8rem; font-weight: 700; }
+          ul { padding-left: 1.25rem; }
+          li { margin-bottom: 0.5rem; }
+          code { font-family: monospace; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 0.9rem; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>🔐 ZK Identity System API Node</h1>
+          <p><span class="status">● ONLINE</span></p>
+          <p>The backend node is running successfully. This server handles cryptographic ECDSA signatures and real-time WebSockets sync.</p>
+          <h3>Active Endpoints:</h3>
+          <ul>
+            <li><code>GET /health</code> - Check server health</li>
+            <li><code>GET /api/issuer-key</code> - Fetch Issuer public key</li>
+            <li><code>POST /api/issue</code> - Generate signed credentials</li>
+            <li><code>POST /api/verify</code> - Verify ZK proof via HTTP</li>
+            <li><code>WS ws://localhost:8080</code> - WebSockets connection entry point</li>
+          </ul>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
 // Health check
 app.get("/health", (req, res) => {
   res.json({
