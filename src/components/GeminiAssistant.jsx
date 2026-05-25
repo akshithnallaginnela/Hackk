@@ -28,16 +28,17 @@ export default function GeminiAssistant() {
     }
   }, [open]);
 
-  const send = async () => {
-    if (!input.trim() || loading) return;
+  const send = async (messageOverride) => {
+    const msg = messageOverride || input;
+    if (!msg.trim() || loading) return;
 
-    const userMsg = { role: "user", text: input.trim() };
+    const userMsg = { role: "user", text: msg.trim() };
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setLoading(true);
 
     try {
-      const reply = await askGemini(input.trim(), messages);
+      const reply = await askGemini(msg.trim(), messages);
       setMessages((prev) => [...prev, { role: "assistant", text: reply }]);
     } catch (err) {
       setMessages((prev) => [
@@ -97,13 +98,7 @@ export default function GeminiAssistant() {
                 {quickQuestions.map((q) => (
                   <button
                     key={q}
-                    onClick={() => {
-                      setInput(q);
-                      setTimeout(() => {
-                        setInput(q);
-                        send();
-                      }, 50);
-                    }}
+                    onClick={() => send(q)}
                     style={{
                       padding: "8px 12px",
                       background: "rgba(99, 102, 241, 0.08)",

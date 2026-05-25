@@ -9,7 +9,10 @@ import * as snarkjs from "snarkjs";
 async function hasRealCircuit() {
   try {
     const res = await fetch("/circuits/age_check.wasm", { method: "HEAD" });
-    return res.ok;
+    if (!res.ok) return false;
+    // Verify it's actually a WASM file, not an HTML 404 page
+    const contentType = res.headers.get("content-type") || "";
+    return contentType.includes("wasm") || contentType.includes("octet-stream");
   } catch {
     return false;
   }
