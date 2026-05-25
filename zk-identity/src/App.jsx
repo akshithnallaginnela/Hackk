@@ -1,122 +1,124 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useState } from "react";
+import ProverPortal from "./components/ProverPortal";
+import VerifierPortal from "./components/VerifierPortal";
+import GeminiAssistant from "./components/GeminiAssistant";
+import ProofHistory from "./components/ProofHistory";
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+  const [generatedProof, setGeneratedProof] = useState(null);
+  const [activeTab, setActiveTab] = useState("prover");
 
   return (
     <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
+      {/* Animated background */}
+      <div className="app-background"></div>
+      <div className="grid-pattern"></div>
+
+      <div className="app-content">
+        {/* Header */}
+        <header className="header">
+          <div className="header-badge">
+            <span className="dot"></span>
+            Zero-Knowledge Identity
+          </div>
+          <h1 className="header-title">
+            <span className="lock-icon">🔐</span> Invisible Identity
+          </h1>
+          <p className="header-subtitle">
+            Prove who you are — without exposing what you are.
           </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+          <div className="header-tech-stack">
+            ⚡ ZK Proofs (Groth16) + Gemini AI + React
+          </div>
+        </header>
 
-      <div className="ticks"></div>
+        {/* Tab Navigation */}
+        <nav className="tab-nav">
+          <button
+            className={`tab-btn ${activeTab === "prover" ? "active" : ""}`}
+            onClick={() => setActiveTab("prover")}
+          >
+            <span className="tab-icon">👤</span>
+            I am the User
+          </button>
+          <button
+            className={`tab-btn ${activeTab === "verifier" ? "active" : ""}`}
+            onClick={() => setActiveTab("verifier")}
+          >
+            <span className="tab-icon">🏢</span>
+            I am the Verifier
+          </button>
+        </nav>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+        {/* Active Portal */}
+        <div style={{ animation: "fadeIn 0.3s ease-out" }} key={activeTab}>
+          {activeTab === "prover" && (
+            <ProverPortal onProofGenerated={setGeneratedProof} />
+          )}
+          {activeTab === "verifier" && (
+            <VerifierPortal incomingProof={generatedProof} />
+          )}
         </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
+        {/* Proof History */}
+        <ProofHistory />
+
+        {/* How it Works Flow */}
+        <div className="flow-section">
+          <div className="flow-title">How Zero-Knowledge Verification Works</div>
+          <div className="flow-grid">
+            <div className="flow-step">
+              <div className="flow-step-number">1</div>
+              <div className="flow-step-icon">🧑</div>
+              <div className="flow-step-title">User inputs data</div>
+              <div className="flow-step-desc">
+                Private data stays on your device — never transmitted
+              </div>
+            </div>
+            <div className="flow-step">
+              <div className="flow-step-number">2</div>
+              <div className="flow-step-icon">⚙️</div>
+              <div className="flow-step-title">ZK Proof generated</div>
+              <div className="flow-step-desc">
+                Groth16 circuit proves the claim mathematically
+              </div>
+            </div>
+            <div className="flow-step">
+              <div className="flow-step-number">3</div>
+              <div className="flow-step-icon">✅</div>
+              <div className="flow-step-title">Verifier checks</div>
+              <div className="flow-step-desc">
+                Gets YES/NO — never sees your actual data
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <footer className="footer">
+          <p>
+            Built with 🔐 by <strong>Invisible Identity</strong> | 
+            100% Open Source | 
+            ZK Proofs + Gemini AI
+          </p>
+          <p style={{ marginTop: 4 }}>
+            <a href="https://github.com" target="_blank" rel="noopener">
+              Circom
+            </a>{" "}
+            ·{" "}
+            <a href="https://github.com/iden3/snarkjs" target="_blank" rel="noopener">
+              snarkjs
+            </a>{" "}
+            ·{" "}
+            <a href="https://ai.google.dev" target="_blank" rel="noopener">
+              Gemini AI
+            </a>
+          </p>
+        </footer>
+      </div>
+
+      {/* Floating AI Assistant */}
+      <GeminiAssistant />
     </>
-  )
+  );
 }
-
-export default App
