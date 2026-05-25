@@ -39,7 +39,7 @@ const publicKeyPem = publicKey.export({ type: "spki", format: "pem" }).toString(
 console.log("🏛️  Issuer Keypair generated successfully (secp256k1)");
 
 // WebSocket Connection Management
-// Map of sessionId -> { verifier: ws, prover: ws }
+// Map of sessionId -> { verifier: ws, prover: ws, issuer: ws }
 const activeSessions = new Map();
 
 wss.on("connection", (ws) => {
@@ -62,7 +62,7 @@ wss.on("connection", (ws) => {
           clientRole = role;
 
           if (!activeSessions.has(sessionId)) {
-            activeSessions.set(sessionId, { verifier: null, prover: null });
+            activeSessions.set(sessionId, { verifier: null, prover: null, issuer: null });
           }
 
           const session = activeSessions.get(sessionId);
@@ -71,9 +71,16 @@ wss.on("connection", (ws) => {
           console.log(`👤 Registered ${role} for session ${sessionId}`);
           
           // Notify the other side if they are already connected
-          if (role === "prover" && session.verifier) {
-            session.verifier.send(JSON.stringify({ type: "prover_connected" }));
+          if (role === "prover") {
+            if (session.verifier) {
+              session.verifier.send(JSON.stringify({ type: "prover_connected" }));
+            }
+            if (session.issuer) {
+              session.issuer.send(JSON.stringify({ type: "prover_connected" }));
+            }
           } else if (role === "verifier" && session.prover) {
+            ws.send(JSON.stringify({ type: "prover_connected" }));
+          } else if (role === "issuer" && session.prover) {
             ws.send(JSON.stringify({ type: "prover_connected" }));
           }
 
@@ -110,6 +117,28 @@ wss.on("connection", (ws) => {
           ws.send(JSON.stringify({ type: "submit_status", status: "success", valid: verification.valid }));
           break;
         }
+
+        case "issue_credential": {
+          const { sessionId, credential } = payload;
+          if (!sessionId || !credential) return;
+
+          console.log(`🏛️  Relaying credential from Issuer to Prover for session ${sessionId}...`);
+          const session = activeSessions.get(sessionId);
+
+          if (!session || !session.prover) {
+            ws.send(JSON.stringify({ type: "error", message: "Prover wallet not synced to this session" }));
+            return;
+          }
+
+          // Push credential directly to Prover Wallet
+          session.prover.send(JSON.stringify({
+            type: "credential_issued",
+            credential
+          }));
+
+          ws.send(JSON.stringify({ type: "issue_status", status: "success" }));
+          break;
+        }
       }
     } catch (err) {
       console.error("❌ Error handling WS message:", err);
@@ -129,11 +158,19 @@ wss.on("connection", (ws) => {
         if (session.verifier) {
           session.verifier.send(JSON.stringify({ type: "prover_disconnected" }));
         }
+        if (session.issuer) {
+          session.issuer.send(JSON.stringify({ type: "prover_disconnected" }));
+        }
         session.prover = null;
+      } else if (clientRole === "issuer") {
+        if (session.prover) {
+          session.prover.send(JSON.stringify({ type: "issuer_disconnected" }));
+        }
+        session.issuer = null;
       }
 
       // Cleanup empty session
-      if (!session.verifier && !session.prover) {
+      if (!session.verifier && !session.prover && !session.issuer) {
         activeSessions.delete(clientSession);
         console.log(`🗑️  Cleaned up empty session ${clientSession}`);
       }

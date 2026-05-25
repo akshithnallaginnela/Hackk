@@ -1,12 +1,11 @@
 import { useState } from "react";
-import IssuerPortal from "./components/IssuerPortal";
 import ProverWallet from "./components/ProverWallet";
 import VerifierPortal from "./components/VerifierPortal";
 import GeminiAssistant from "./components/GeminiAssistant";
 import ProofHistory from "./components/ProofHistory";
 
 export default function App() {
-  const [activePage, setActivePage] = useState("wallet"); // wallet | verifier | issuer
+  const [activePage, setActivePage] = useState("wallet"); // wallet | verifier
 
   return (
     <>
@@ -18,15 +17,9 @@ export default function App() {
         {/* Global Demo Hub Navigation Bar */}
         <nav className="global-nav">
           <div className="global-nav-brand">
-            <span>🔐</span> Invisible Identity ZK
+            <span>🔐</span> Invisible Identity Wallet
           </div>
           <div className="global-nav-links">
-            <button
-              className={`global-nav-link ${activePage === "issuer" ? "active" : ""}`}
-              onClick={() => setActivePage("issuer")}
-            >
-              🏛️ Gov Issuer
-            </button>
             <button
               className={`global-nav-link ${activePage === "wallet" ? "active" : ""}`}
               onClick={() => setActivePage("wallet")}
@@ -58,7 +51,6 @@ export default function App() {
 
         {/* Active Portal Body */}
         <main style={{ animation: "fadeIn 0.3s ease-out" }} key={activePage}>
-          {activePage === "issuer" && <IssuerPortal />}
           {activePage === "wallet" && (
             <>
               <ProverWallet />
@@ -77,7 +69,7 @@ export default function App() {
               <div className="flow-step-icon">🏛️</div>
               <div className="flow-step-title">Government Sign</div>
               <div className="flow-step-desc">
-                Authority signs your identity details locally using an asymmetric key.
+                Visit the separate Govt website (Port 5175) to get credentials signed.
               </div>
             </div>
             <div className="flow-step">

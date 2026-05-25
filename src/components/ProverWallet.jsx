@@ -20,6 +20,10 @@ export default function ProverWallet() {
   const [latestProof, setLatestProof] = useState(null);
   const [error, setError] = useState(null);
 
+  // Import credential states
+  const [importToken, setImportToken] = useState("");
+  const [pendingCredential, setPendingCredential] = useState(null);
+
   useEffect(() => {
     // Load issued credentials from localStorage
     const saved = JSON.parse(localStorage.getItem("myCredentials") || "[]");
@@ -34,6 +38,43 @@ export default function ProverWallet() {
       }
     };
   }, []);
+
+  const handleImportToken = (tokenStr) => {
+    try {
+      const rawJson = tokenStr.trim();
+      let credentialData = null;
+
+      // Check if it's base64 encoded or direct JSON
+      if (rawJson.startsWith("{")) {
+        credentialData = JSON.parse(rawJson);
+      } else {
+        const decoded = atob(rawJson);
+        credentialData = JSON.parse(decoded);
+      }
+
+      if (!credentialData.subject || !credentialData.signature) {
+        throw new Error("Missing subject or signature properties");
+      }
+
+      const updated = [...credentials];
+      // Filter out duplicate Aadhaar cards
+      const filtered = updated.filter(
+        c => c.subject.aadhaarNumber !== credentialData.subject.aadhaarNumber
+      );
+      filtered.unshift(credentialData);
+      
+      setCredentials(filtered);
+      localStorage.setItem("myCredentials", JSON.stringify(filtered));
+      setSelectedCardIdx(0);
+      setImportToken("");
+      setError(null);
+      return true;
+    } catch (err) {
+      console.error(err);
+      setError("Invalid credential token format.");
+      return false;
+    }
+  };
 
   const connectToTerminal = () => {
     if (!sessionCode || sessionCode.trim().length === 0) return;
@@ -63,6 +104,11 @@ export default function ProverWallet() {
         } else if (data.type === "verifier_disconnected") {
           setWsStatus("disconnected");
           setError("Verifier terminal disconnected.");
+        } else if (data.type === "issuer_disconnected") {
+          addLog("Government issuer disconnected from sync session.");
+        } else if (data.type === "credential_issued") {
+          console.log("📥 Credential received via WebSocket push:", data.credential);
+          setPendingCredential(data.credential);
         }
       };
 
@@ -172,7 +218,7 @@ export default function ProverWallet() {
 
   return (
     <div className="glass-card max-w-container" style={{ margin: "2rem auto" }}>
-      <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+      <div className="card-header" style={{ display: "flex", justifycontent: "space-between", alignItems: "flex-start", gap: 10 }}>
         <div>
           <div className="card-icon-title">
             <div className="card-icon prover">👤</div>
@@ -187,23 +233,126 @@ export default function ProverWallet() {
         <div className={`ws-indicator ${wsStatus}`}>
           <span className="pulse-dot"></span>
           <span>
-            {wsStatus === "connected" && `Connected to Verifier`}
+            {wsStatus === "connected" && `Connected to Network`}
             {wsStatus === "connecting" && "Connecting..."}
             {wsStatus === "disconnected" && "Offline (Local Only)"}
           </span>
         </div>
       </div>
 
-      {credentials.length === 0 ? (
-        <div className="status-box warning" style={{ display: "flex", flexDirection: "column", gap: 10, padding: 20 }}>
+      {/* Pending Credential Notification */}
+      {pendingCredential && (
+        <div className="status-box success" style={{ marginBottom: "1.5rem", flexDirection: "column", gap: 10, animation: "scaleIn 0.3s ease-out" }}>
           <div>
-            <strong>💳 Your Wallet is Empty!</strong>
-            <div style={{ marginTop: 4, opacity: 0.85 }}>
-              You don't have any secure identity credentials issued yet.
+            <strong style={{ fontSize: "0.9rem" }}>📥 Incoming Credential Received Live!</strong>
+            <div style={{ marginTop: 4, opacity: 0.85, fontSize: "0.8rem" }}>
+              Issuer: <em>{pendingCredential.issuer}</em><br/>
+              Subject Name: <strong>{pendingCredential.subject.name}</strong> (DOB: {pendingCredential.subject.birthYear})
             </div>
           </div>
-          <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
-            Go to the **🏛️ Issuer Portal** to issue your cryptographically signed mock Aadhaar Card first.
+          <div style={{ display: "flex", gap: 10 }}>
+            <button
+              onClick={() => {
+                const updated = [...credentials];
+                const filtered = updated.filter(c => c.subject.aadhaarNumber !== pendingCredential.subject.aadhaarNumber);
+                filtered.unshift(pendingCredential);
+                setCredentials(filtered);
+                localStorage.setItem("myCredentials", JSON.stringify(filtered));
+                setSelectedCardIdx(0);
+                setPendingCredential(null);
+              }}
+              className="btn btn-primary"
+              style={{ padding: "6px 12px", width: "auto", fontSize: "0.75rem" }}
+            >
+              Accept & Save
+            </button>
+            <button
+              onClick={() => setPendingCredential(null)}
+              className="btn"
+              style={{ padding: "6px 12px", width: "auto", fontSize: "0.75rem", background: "none", color: "var(--text-secondary)", border: "1px solid var(--border-default)" }}
+            >
+              Decline
+            </button>
+          </div>
+        </div>
+      )}
+
+      {credentials.length === 0 ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div className="status-box warning" style={{ display: "flex", flexDirection: "column", gap: 10, padding: 20 }}>
+            <div>
+              <strong>💳 Your Wallet is Empty!</strong>
+              <div style={{ marginTop: 4, opacity: 0.85 }}>
+                You don't have any secure identity credentials issued yet.
+              </div>
+            </div>
+            <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
+              Please visit the separate **Government Issuer Portal** on port **5175** to request and sign your digital ID card.
+            </div>
+          </div>
+
+          {/* Import credential box when wallet is empty */}
+          <div style={{ padding: 16, background: "var(--bg-tertiary)", borderRadius: "var(--radius-md)", border: "1px solid var(--border-default)" }}>
+            <label className="input-label" style={{ marginBottom: 8 }}>📥 Import Credential Token</label>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                type="text"
+                placeholder="Paste secure government identity token here..."
+                value={importToken}
+                onChange={(e) => setImportToken(e.target.value)}
+                className="input-field"
+                style={{ fontSize: "0.8rem", fontFamily: "var(--font-mono)" }}
+              />
+              <button
+                onClick={() => handleImportToken(importToken)}
+                disabled={importToken.trim().length === 0}
+                className="btn btn-emerald"
+                style={{ width: "auto", padding: "0 16px", fontSize: "0.8rem" }}
+              >
+                Import
+              </button>
+            </div>
+          </div>
+
+          {/* Live Sync connection help when wallet is empty */}
+          <div style={{ padding: 16, background: "var(--bg-tertiary)", borderRadius: "var(--radius-md)", border: "1px solid var(--border-default)" }}>
+            <label className="input-label" style={{ marginBottom: 8 }}>
+              🔗 Live Sync with Govt Issuer Website
+            </label>
+            
+            {wsStatus !== "connected" ? (
+              <div className="session-keypad">
+                <input
+                  type="text"
+                  placeholder="Enter 4-Digit Session ID to Sync"
+                  value={sessionCode}
+                  onChange={(e) => setSessionCode(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                  className="session-input"
+                />
+                <button
+                  onClick={connectToTerminal}
+                  disabled={wsStatus === "connecting" || sessionCode.length < 4}
+                  className="btn btn-primary"
+                  style={{ width: "auto", padding: "0 20px" }}
+                >
+                  Connect
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+                  Sync active: <strong>{sessionCode}</strong>. (Waiting for govt portal to issue ID...)
+                </span>
+                <button
+                  onClick={disconnectTerminal}
+                  className="btn"
+                  style={{ width: "auto", padding: "6px 12px", background: "none", color: "var(--accent-red)", border: "1px solid rgba(220, 38, 38, 0.2)", fontSize: "0.75rem" }}
+                >
+                  Disconnect
+                </button>
+              </div>
+            )}
+            {error && <div style={{ color: "var(--accent-red)", fontSize: "0.75rem", marginTop: 4 }}>⚠️ {error}</div>}
           </div>
         </div>
       ) : (
@@ -250,7 +399,7 @@ export default function ProverWallet() {
           {/* Sync Connection Section */}
           <div style={{ padding: 16, background: "var(--bg-tertiary)", borderRadius: "var(--radius-md)", marginBottom: "1.5rem", border: "1px solid var(--border-default)" }}>
             <label className="input-label" style={{ marginBottom: 8 }}>
-              🔗 Live Sync with Merchant Terminal
+              🔗 Live Sync with Merchant Terminal / Govt Issuer
             </label>
             
             {wsStatus !== "connected" ? (
@@ -274,7 +423,7 @@ export default function ProverWallet() {
             ) : (
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
-                  Sync session active: <strong>{sessionCode}</strong>
+                  Sync active: <strong>{sessionCode}</strong>
                 </span>
                 <button
                   onClick={disconnectTerminal}
@@ -395,6 +544,29 @@ export default function ProverWallet() {
               </div>
             </div>
           )}
+
+          {/* Import credential box when wallet is full */}
+          <div style={{ marginTop: "2rem", padding: 16, background: "var(--bg-tertiary)", borderRadius: "var(--radius-md)", border: "1px solid var(--border-default)" }}>
+            <label className="input-label" style={{ marginBottom: 8 }}>📥 Import Additional Credential Token</label>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                type="text"
+                placeholder="Paste secure government identity token here..."
+                value={importToken}
+                onChange={(e) => setImportToken(e.target.value)}
+                className="input-field"
+                style={{ fontSize: "0.8rem", fontFamily: "var(--font-mono)" }}
+              />
+              <button
+                onClick={() => handleImportToken(importToken)}
+                disabled={importToken.trim().length === 0}
+                className="btn btn-emerald"
+                style={{ width: "auto", padding: "0 16px", fontSize: "0.8rem" }}
+              >
+                Import
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
