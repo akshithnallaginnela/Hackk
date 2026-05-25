@@ -1,6 +1,18 @@
 import { useState, useEffect, useRef } from "react";
 import { generateAgeProof, generateIncomeProof, generateAadhaarProof } from "../utils/zkProver";
 
+// Dynamically resolve backend URLs (falls back to localhost for development)
+const getBackendUrls = () => {
+  const backendBase = import.meta.env.VITE_BACKEND_URL || "http://localhost:8080";
+  const wsProto = backendBase.startsWith("https") ? "wss" : "ws";
+  const wsHost = backendBase.replace(/^https?:\/\//, "");
+  return {
+    http: backendBase,
+    ws: `${wsProto}://${wsHost}`
+  };
+};
+const BACKEND_URLS = getBackendUrls();
+
 export default function ProverWallet() {
   const [credentials, setCredentials] = useState([]);
   const [selectedCardIdx, setSelectedCardIdx] = useState(null);
@@ -42,17 +54,30 @@ export default function ProverWallet() {
   const handleImportToken = (tokenStr) => {
     try {
       const rawJson = tokenStr.trim();
+      if (!rawJson) return false;
+
       let credentialData = null;
 
-      // Check if it's base64 encoded or direct JSON
-      if (rawJson.startsWith("{")) {
+      // 1. Try to parse directly as JSON
+      try {
         credentialData = JSON.parse(rawJson);
-      } else {
-        const decoded = atob(rawJson);
-        credentialData = JSON.parse(decoded);
+      } catch {
+        // 2. Try to parse as Unicode-safe Base64
+        try {
+          const decoded = decodeURIComponent(escape(atob(rawJson)));
+          credentialData = JSON.parse(decoded);
+        } catch {
+          // 3. Fallback to standard atob
+          try {
+            const decoded = atob(rawJson);
+            credentialData = JSON.parse(decoded);
+          } catch {
+            throw new Error("Token is not valid JSON or Base64");
+          }
+        }
       }
 
-      if (!credentialData.subject || !credentialData.signature) {
+      if (!credentialData || !credentialData.subject || !credentialData.signature) {
         throw new Error("Missing subject or signature properties");
       }
 
@@ -71,7 +96,7 @@ export default function ProverWallet() {
       return true;
     } catch (err) {
       console.error(err);
-      setError("Invalid credential token format.");
+      setError("Invalid credential token: " + err.message);
       return false;
     }
   };
@@ -82,7 +107,7 @@ export default function ProverWallet() {
     setError(null);
 
     try {
-      const socket = new WebSocket("ws://localhost:8080");
+      const socket = new WebSocket(BACKEND_URLS.ws);
       wsRef.current = socket;
 
       socket.onopen = () => {
@@ -359,7 +384,27 @@ export default function ProverWallet() {
         <div>
           {/* Card Carousel Selector */}
           <div className="wallet-deck">
-            <label className="input-label">Select Credential Card</label>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <label className="input-label" style={{ margin: 0 }}>Select Credential Card</label>
+              <button
+                onClick={() => {
+                  localStorage.removeItem("myCredentials");
+                  setCredentials([]);
+                  setSelectedCardIdx(null);
+                }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "var(--accent-red)",
+                  fontSize: "0.75rem",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                  opacity: 0.8
+                }}
+              >
+                🗑️ Clear Card
+              </button>
+            </div>
             <div className="identity-card-container" style={{ margin: "0 auto 1.5rem" }}>
               <div className="identity-card" style={{ border: "1.5px solid var(--accent-primary)" }}>
                 <div className="card-top">

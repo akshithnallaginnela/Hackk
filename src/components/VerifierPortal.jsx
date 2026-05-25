@@ -1,6 +1,18 @@
 import { useState, useEffect, useRef } from "react";
 import { detectFraudPattern } from "../utils/geminiClient";
 
+// Dynamically resolve backend URLs (falls back to localhost for development)
+const getBackendUrls = () => {
+  const backendBase = import.meta.env.VITE_BACKEND_URL || "http://localhost:8080";
+  const wsProto = backendBase.startsWith("https") ? "wss" : "ws";
+  const wsHost = backendBase.replace(/^https?:\/\//, "");
+  return {
+    http: backendBase,
+    ws: `${wsProto}://${wsHost}`
+  };
+};
+const BACKEND_URLS = getBackendUrls();
+
 export default function VerifierPortal() {
   const [sessionCode] = useState(() => Math.floor(1000 + Math.random() * 9000).toString());
   const [wsStatus, setWsStatus] = useState("disconnected"); // disconnected | connecting | listening | client_connected
@@ -16,7 +28,7 @@ export default function VerifierPortal() {
     setWsStatus("connecting");
 
     try {
-      const socket = new WebSocket("ws://localhost:8080");
+      const socket = new WebSocket(BACKEND_URLS.ws);
       wsRef.current = socket;
 
       socket.onopen = () => {

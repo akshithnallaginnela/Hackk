@@ -332,10 +332,10 @@ app.get("/health", (req, res) => {
   });
 });
 
-// Listen on all ports
-server.listen(PORT, () => {
-  console.log(`\n🔐 ZK SSI Network Server running at http://localhost:${PORT}`);
-  console.log(`   WS URL: ws://localhost:${PORT}`);
+// Listen on localhost (127.0.0.1) explicitly to bypass Windows IPv6 conflicts
+server.listen(PORT, "127.0.0.1", () => {
+  console.log(`\n🔐 ZK SSI Network Server running at http://127.0.0.1:${PORT}`);
+  console.log(`   WS URL: ws://127.0.0.1:${PORT}`);
   console.log(`   POST /api/issue - Issue signed credentials`);
   console.log(`   POST /api/verify - Verify ZK proof via HTTP`);
   console.log(`   GET  /api/issuer-key - Public verification key`);

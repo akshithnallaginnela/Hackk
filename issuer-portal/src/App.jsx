@@ -1,5 +1,17 @@
 import { useState, useEffect, useRef } from "react";
 
+// Dynamically resolve backend URLs (falls back to localhost for development)
+const getBackendUrls = () => {
+  const backendBase = import.meta.env.VITE_BACKEND_URL || "http://localhost:8080";
+  const wsProto = backendBase.startsWith("https") ? "wss" : "ws";
+  const wsHost = backendBase.replace(/^https?:\/\//, "");
+  return {
+    http: backendBase,
+    ws: `${wsProto}://${wsHost}`
+  };
+};
+const BACKEND_URLS = getBackendUrls();
+
 export default function App() {
   const [name, setName] = useState("");
   const [birthYear, setBirthYear] = useState("");
@@ -30,7 +42,7 @@ export default function App() {
     setError(null);
 
     try {
-      const socket = new WebSocket("ws://localhost:8080");
+      const socket = new WebSocket(BACKEND_URLS.ws);
       wsRef.current = socket;
 
       socket.onopen = () => {
@@ -91,7 +103,7 @@ export default function App() {
     }
 
     try {
-      const response = await fetch("http://localhost:8080/api/issue", {
+      const response = await fetch(`${BACKEND_URLS.http}/api/issue`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -129,10 +141,14 @@ export default function App() {
 
   const handleCopyToClipboard = () => {
     if (!issuedCredential) return;
-    const token = btoa(JSON.stringify(issuedCredential));
-    navigator.clipboard.writeText(token);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      const token = btoa(unescape(encodeURIComponent(JSON.stringify(issuedCredential))));
+      navigator.clipboard.writeText(token);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Token encoding failed:", err);
+    }
   };
 
   const getMaskedAadhaar = (num) => {
