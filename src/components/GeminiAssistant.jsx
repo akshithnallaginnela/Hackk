@@ -104,7 +104,7 @@ export default function GeminiAssistant() {
                       background: "rgba(99, 102, 241, 0.08)",
                       border: "1px solid rgba(99, 102, 241, 0.15)",
                       borderRadius: "var(--radius-md)",
-                      color: "var(--accent-primary-light)",
+                      color: "var(--accent-primary)",
                       fontSize: "0.78rem",
                       cursor: "pointer",
                       textAlign: "left",

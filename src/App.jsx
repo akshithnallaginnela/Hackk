@@ -1,12 +1,12 @@
 import { useState } from "react";
-import ProverPortal from "./components/ProverPortal";
+import IssuerPortal from "./components/IssuerPortal";
+import ProverWallet from "./components/ProverWallet";
 import VerifierPortal from "./components/VerifierPortal";
 import GeminiAssistant from "./components/GeminiAssistant";
 import ProofHistory from "./components/ProofHistory";
 
 export default function App() {
-  const [generatedProof, setGeneratedProof] = useState(null);
-  const [activeTab, setActiveTab] = useState("prover");
+  const [activePage, setActivePage] = useState("wallet"); // wallet | verifier | issuer
 
   return (
     <>
@@ -15,97 +15,98 @@ export default function App() {
       <div className="grid-pattern"></div>
 
       <div className="app-content">
-        {/* Header */}
-        <header className="header">
-          <div className="header-badge">
-            <span className="dot"></span>
-            Zero-Knowledge Identity
+        {/* Global Demo Hub Navigation Bar */}
+        <nav className="global-nav">
+          <div className="global-nav-brand">
+            <span>🔐</span> Invisible Identity ZK
           </div>
-          <h1 className="header-title">
-            <span className="lock-icon">🔐</span> Invisible Identity
-          </h1>
-          <p className="header-subtitle">
-            Prove who you are — without exposing what you are.
-          </p>
-          <div className="header-tech-stack">
-            ⚡ ZK Proofs (Groth16) + Gemini AI + React
+          <div className="global-nav-links">
+            <button
+              className={`global-nav-link ${activePage === "issuer" ? "active" : ""}`}
+              onClick={() => setActivePage("issuer")}
+            >
+              🏛️ Gov Issuer
+            </button>
+            <button
+              className={`global-nav-link ${activePage === "wallet" ? "active" : ""}`}
+              onClick={() => setActivePage("wallet")}
+            >
+              💼 My Wallet
+            </button>
+            <button
+              className={`global-nav-link ${activePage === "verifier" ? "active" : ""}`}
+              onClick={() => setActivePage("verifier")}
+            >
+              🍻 Store Terminal
+            </button>
           </div>
-        </header>
-
-        {/* Tab Navigation */}
-        <nav className="tab-nav">
-          <button
-            className={`tab-btn ${activeTab === "prover" ? "active" : ""}`}
-            onClick={() => setActiveTab("prover")}
-          >
-            <span className="tab-icon">👤</span>
-            I am the User
-          </button>
-          <button
-            className={`tab-btn ${activeTab === "verifier" ? "active" : ""}`}
-            onClick={() => setActiveTab("verifier")}
-          >
-            <span className="tab-icon">🏢</span>
-            I am the Verifier
-          </button>
         </nav>
 
-        {/* Active Portal */}
-        <div style={{ animation: "fadeIn 0.3s ease-out" }} key={activeTab}>
-          {activeTab === "prover" && (
-            <ProverPortal onProofGenerated={setGeneratedProof} />
-          )}
-          {activeTab === "verifier" && (
-            <VerifierPortal incomingProof={generatedProof} />
-          )}
-        </div>
+        {/* Master Header */}
+        <header className="header" style={{ padding: "1.5rem 0 1rem" }}>
+          <div className="header-badge">
+            <span className="dot"></span>
+            Real-time SSI Network
+          </div>
+          <h1 className="header-title" style={{ fontSize: "clamp(2rem, 4vw, 3rem)" }}>
+            <span className="lock-icon">🔐</span> Invisible Identity
+          </h1>
+          <p className="header-subtitle" style={{ fontSize: "0.95rem" }}>
+            Prove who you are — without exposing what you are.
+          </p>
+        </header>
 
-        {/* Proof History */}
-        <ProofHistory />
+        {/* Active Portal Body */}
+        <main style={{ animation: "fadeIn 0.3s ease-out" }} key={activePage}>
+          {activePage === "issuer" && <IssuerPortal />}
+          {activePage === "wallet" && (
+            <>
+              <ProverWallet />
+              <ProofHistory />
+            </>
+          )}
+          {activePage === "verifier" && <VerifierPortal />}
+        </main>
 
         {/* How it Works Flow */}
-        <div className="flow-section">
+        <div className="flow-section" style={{ marginTop: "3rem" }}>
           <div className="flow-title">How Zero-Knowledge Verification Works</div>
           <div className="flow-grid">
             <div className="flow-step">
               <div className="flow-step-number">1</div>
-              <div className="flow-step-icon">🧑</div>
-              <div className="flow-step-title">User inputs data</div>
+              <div className="flow-step-icon">🏛️</div>
+              <div className="flow-step-title">Government Sign</div>
               <div className="flow-step-desc">
-                Private data stays on your device — never transmitted
+                Authority signs your identity details locally using an asymmetric key.
               </div>
             </div>
             <div className="flow-step">
               <div className="flow-step-number">2</div>
               <div className="flow-step-icon">⚙️</div>
-              <div className="flow-step-title">ZK Proof generated</div>
+              <div className="flow-step-title">ZK Proof Generated</div>
               <div className="flow-step-desc">
-                Groth16 circuit proves the claim mathematically
+                Your device generates a ZK proof verifying signature + claim age.
               </div>
             </div>
             <div className="flow-step">
               <div className="flow-step-number">3</div>
-              <div className="flow-step-icon">✅</div>
-              <div className="flow-step-title">Verifier checks</div>
+              <div className="flow-step-icon">📡</div>
+              <div className="flow-step-title">Real-time Verify</div>
               <div className="flow-step-desc">
-                Gets YES/NO — never sees your actual data
+                Verifier gets YES/NO result instantly over WebSockets.
               </div>
             </div>
           </div>
         </div>
 
         {/* Footer */}
-        <footer className="footer">
+        <footer className="footer" style={{ marginTop: "4rem" }}>
           <p>
             Built with 🔐 by <strong>Invisible Identity</strong> | 
-            100% Open Source | 
-            ZK Proofs + Gemini AI
+            100% Client-Side ZK | 
+            ECDSA Signatures + WebSockets
           </p>
-          <p style={{ marginTop: 4 }}>
-            <a href="https://github.com" target="_blank" rel="noopener">
-              Circom
-            </a>{" "}
-            ·{" "}
+          <p style={{ marginTop: 6 }}>
             <a href="https://github.com/iden3/snarkjs" target="_blank" rel="noopener">
               snarkjs
             </a>{" "}
