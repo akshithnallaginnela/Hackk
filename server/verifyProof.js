@@ -332,10 +332,12 @@ app.get("/health", (req, res) => {
   });
 });
 
-// Listen on localhost (127.0.0.1) explicitly to bypass Windows IPv6 conflicts
-server.listen(PORT, "127.0.0.1", () => {
-  console.log(`\n🔐 ZK SSI Network Server running at http://127.0.0.1:${PORT}`);
-  console.log(`   WS URL: ws://127.0.0.1:${PORT}`);
+// Bind to 0.0.0.0 in production (so Render's router can reach it) and 127.0.0.1 locally (to bypass Windows socket conflicts)
+const HOST = process.env.NODE_ENV === "production" ? "0.0.0.0" : "127.0.0.1";
+
+server.listen(PORT, HOST, () => {
+  console.log(`\n🔐 ZK SSI Network Server running at http://${HOST}:${PORT}`);
+  console.log(`   WS URL: ws://${HOST}:${PORT}`);
   console.log(`   POST /api/issue - Issue signed credentials`);
   console.log(`   POST /api/verify - Verify ZK proof via HTTP`);
   console.log(`   GET  /api/issuer-key - Public verification key`);
