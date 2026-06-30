@@ -69,7 +69,7 @@ export default function App() {
               <div className="flow-step-icon">🏛️</div>
               <div className="flow-step-title">Government Sign</div>
               <div className="flow-step-desc">
-                Visit the separate Govt website (Port 5175) to get credentials signed.
+                Visit the separate Government Identity Portal to get credentials signed.
               </div>
             </div>
             <div className="flow-step">

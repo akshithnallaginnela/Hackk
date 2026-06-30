@@ -189,7 +189,7 @@ export default function App() {
           {/* Sync Code Keypad */}
           <div style={{ padding: 14, background: "var(--bg-tertiary)", borderRadius: "var(--radius-md)", marginBottom: "1.5rem", border: "1px solid var(--border-default)" }}>
             <label className="input-label" style={{ marginBottom: 6 }}>
-              🔗 Live Sync with Customer Wallet app (Port 5174)
+              🔗 Live Sync with Customer Wallet app
             </label>
             {wsStatus === "disconnected" ? (
               <div style={{ display: "flex", gap: 8 }}>
@@ -379,7 +379,7 @@ export default function App() {
               
               {pushedStatus !== "success" && (
                 <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", textAlign: "center", marginTop: 12 }}>
-                  💡 Paste the token into your ZK Wallet app on port **5174** to import it.
+                  💡 Paste the token into your ZK Wallet app to import it.
                 </div>
               )}
             </div>

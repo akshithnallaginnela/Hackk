@@ -312,7 +312,7 @@ export default function ProverWallet() {
               </div>
             </div>
             <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
-              Please visit the separate **Government Issuer Portal** on port **5175** to request and sign your digital ID card.
+              Please visit the separate **Government Issuer Portal** to request and sign your digital ID card.
             </div>
           </div>
 
