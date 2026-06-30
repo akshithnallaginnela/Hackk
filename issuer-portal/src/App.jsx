@@ -23,21 +23,15 @@ export default function App() {
   const [error, setError] = useState(null);
   
   // WS sync connection state
-  const [sessionCode, setSessionCode] = useState("");
+  const [sessionCode] = useState(() => Math.floor(1000 + Math.random() * 9000).toString());
   const [wsStatus, setWsStatus] = useState("disconnected"); // disconnected | connecting | listening | connected
   const wsRef = useRef(null);
 
   const [copied, setCopied] = useState(false);
   const [pushedStatus, setPushedStatus] = useState(null); // null | sending | success | error
 
-  useEffect(() => {
-    return () => {
-      if (wsRef.current) wsRef.current.close();
-    };
-  }, []);
-
   const connectToWalletSession = () => {
-    if (!sessionCode || sessionCode.trim().length === 0) return;
+    if (!sessionCode) return;
     setWsStatus("connecting");
     setError(null);
 
@@ -50,7 +44,7 @@ export default function App() {
         socket.send(JSON.stringify({
           type: "register",
           role: "issuer",
-          sessionId: sessionCode.trim()
+          sessionId: sessionCode
         }));
       };
 
@@ -88,6 +82,13 @@ export default function App() {
     if (wsRef.current) wsRef.current.close();
     setWsStatus("disconnected");
   };
+
+  useEffect(() => {
+    connectToWalletSession();
+    return () => {
+      if (wsRef.current) wsRef.current.close();
+    };
+  }, [sessionCode]);
 
   const handleIssue = async (e) => {
     e.preventDefault();
@@ -188,51 +189,29 @@ export default function App() {
 
           {/* Sync Code Keypad */}
           <div style={{ padding: 14, background: "var(--bg-tertiary)", borderRadius: "var(--radius-md)", marginBottom: "1.5rem", border: "1px solid var(--border-default)" }}>
-            <label className="input-label" style={{ marginBottom: 6 }}>
+            <label className="input-label" style={{ marginBottom: 8 }}>
               🔗 Live Sync with Customer Wallet app
             </label>
-            {wsStatus === "disconnected" ? (
-              <div style={{ display: "flex", gap: 8 }}>
-                <input
-                  type="text"
-                  placeholder="Enter Wallet Session ID"
-                  value={sessionCode}
-                  onChange={(e) => setSessionCode(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                  style={{
-                    flex: 1,
-                    padding: "8px 12px",
-                    background: "var(--bg-primary)",
-                    border: "1px solid var(--border-default)",
-                    borderRadius: "var(--radius-md)",
-                    textAlign: "center",
-                    fontFamily: "var(--font-mono)",
-                    fontWeight: 700,
-                    outline: "none"
-                  }}
-                />
-                <button
-                  onClick={connectToWalletSession}
-                  disabled={sessionCode.length < 4}
-                  className="btn btn-primary"
-                  style={{ width: "auto", padding: "0 16px", fontSize: "0.8rem", borderRadius: "var(--radius-md)" }}
-                >
-                  Sync
-                </button>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.85rem" }}>
+              <span>
+                Sync Session ID: <strong style={{ color: "var(--accent-emerald)", fontSize: "1.1rem", fontFamily: "var(--font-mono)", padding: "2px 8px", background: "rgba(16, 185, 129, 0.1)", borderRadius: 4, marginLeft: 4 }}>{sessionCode}</strong>
+              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {wsStatus === "connected" && <span style={{ color: "var(--accent-emerald)", fontWeight: 700 }}>🟢 Synced</span>}
+                {wsStatus === "listening" && <span style={{ color: "var(--text-secondary)" }}>⏳ Waiting...</span>}
+                {wsStatus === "connecting" && <span style={{ color: "var(--text-secondary)" }}>⚡ Connecting...</span>}
+                {wsStatus === "disconnected" && (
+                  <button 
+                    onClick={connectToWalletSession} 
+                    className="btn btn-primary" 
+                    style={{ padding: "4px 10px", fontSize: "0.7rem", width: "auto" }}
+                  >
+                    Reconnect
+                  </button>
+                )}
               </div>
-            ) : (
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.8rem" }}>
-                <span>
-                  Sync Room ID: <strong>{sessionCode}</strong> {wsStatus === "connected" ? "(🟢 Prover connected)" : "(⏳ Waiting for prover...)"}
-                </span>
-                <button
-                  onClick={disconnectSession}
-                  style={{ background: "none", border: "none", color: "red", cursor: "pointer", fontWeight: 600 }}
-                >
-                  Disconnect
-                </button>
-              </div>
-            )}
-            {error && <div style={{ color: "red", fontSize: "0.72rem", marginTop: 4 }}>⚠️ {error}</div>}
+            </div>
+            {error && <div style={{ color: "red", fontSize: "0.72rem", marginTop: 6 }}>⚠️ {error}</div>}
           </div>
 
           {!issuedCredential ? (
