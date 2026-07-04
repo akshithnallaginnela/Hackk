@@ -1443,4 +1443,131 @@ body {
   }
 }
 
+/* ========================================================================
+   REAL WEBCAM & DEV MAIL CONSOLE HELPERS
+   ======================================================================== */
+.auth-face-camera-container {
+  position: relative;
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--bg-tertiary, #f1f5f9);
+  border: 2px solid var(--border-default, rgba(0,0,0,0.07));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+}
+
+.auth-face-camera-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1); /* mirror effect */
+}
+
+.auth-face-camera-placeholder {
+  font-size: 3.5rem;
+  opacity: 0.25;
+}
+
+.auth-error-box {
+  background: rgba(220, 38, 38, 0.05);
+  border: 1px solid rgba(220, 38, 38, 0.15);
+  color: #dc2626;
+  font-size: 0.8rem;
+  font-weight: 550;
+  padding: 10px 14px;
+  border-radius: var(--radius-md, 12px);
+  text-align: center;
+  margin-bottom: 1rem;
+  animation: slideUp 0.3s ease-out;
+}
+
+/* Onboarding inputs */
+.auth-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  margin-bottom: 0.75rem;
+  text-align: left;
+}
+
+.auth-input-label {
+  font-size: 0.75rem;
+  font-weight: 750;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.auth-text-input {
+  width: 100%;
+  padding: 12px 14px;
+  background: rgba(0, 0, 0, 0.02);
+  border: 1px solid var(--border-default, rgba(0,0,0,0.07));
+  border-radius: var(--radius-md, 12px);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.auth-text-input:focus {
+  border-color: var(--accent-saffron, #f97316);
+  background: var(--bg-secondary, #fff);
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.08);
+}
+
+.auth-btn-link {
+  background: transparent;
+  border: none;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+  font-family: var(--font-sans);
+}
+
+.auth-btn-link:hover {
+  opacity: 0.85;
+}
+
+/* Developer Mail Console Banner */
+.dev-mail-helper {
+  width: 100%;
+  background: #fef08a;
+  border: 1px solid #facc15;
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+  font-family: var(--font-sans);
+  color: #854d0e;
+  margin-bottom: 0.5rem;
+  text-align: left;
+}
+
+.dev-mail-header {
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid rgba(133, 77, 14, 0.15);
+  padding-bottom: 4px;
+  margin-bottom: 6px;
+}
+
+.dev-mail-body {
+  font-size: 0.8rem;
+  font-weight: 550;
+}
+
+.dev-mail-body a {
+  color: #1e3a8a;
+  text-decoration: underline;
+  font-weight: 700;
+}
+
+
 
