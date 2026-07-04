@@ -1,11 +1,28 @@
 import { useState } from "react";
+import LoginScreen from "./components/LoginScreen";
+import Dashboard from "./components/Dashboard";
 import ProverWallet from "./components/ProverWallet";
 import VerifierPortal from "./components/VerifierPortal";
 import GeminiAssistant from "./components/GeminiAssistant";
 import ProofHistory from "./components/ProofHistory";
 
 export default function App() {
-  const [activePage, setActivePage] = useState("wallet"); // wallet | verifier
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [activePage, setActivePage] = useState("dashboard"); // dashboard | wallet | verifier
+
+  const handleLogin = () => {
+    setIsLoggedIn(true);
+    setActivePage("dashboard");
+  };
+
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    setActivePage("dashboard");
+  };
+
+  if (!isLoggedIn) {
+    return <LoginScreen onLogin={handleLogin} />;
+  }
 
   return (
     <>
@@ -14,12 +31,25 @@ export default function App() {
       <div className="grid-pattern"></div>
 
       <div className="app-content">
-        {/* Global Demo Hub Navigation Bar */}
+        {/* Global Navigation Bar */}
         <nav className="global-nav">
-          <div className="global-nav-brand">
-            <span>🔐</span> Invisible Identity Wallet
+          <div className="global-nav-brand" onClick={() => setActivePage("dashboard")} style={{ cursor: "pointer" }}>
+            <span className="nav-brand-logo">
+              <svg width="22" height="22" viewBox="0 0 40 40" fill="none">
+                <path d="M20 2L4 10V20C4 30 12 38 20 38C28 38 36 30 36 20V10L20 2Z" fill="url(#navShield)" stroke="rgba(79,70,229,0.3)" strokeWidth="1.5"/>
+                <text x="20" y="25" textAnchor="middle" fill="white" fontSize="14" fontWeight="700" fontFamily="Inter, sans-serif">ZV</text>
+                <defs><linearGradient id="navShield" x1="4" y1="2" x2="36" y2="38"><stop stopColor="#4f46e5"/><stop offset="1" stopColor="#7c3aed"/></linearGradient></defs>
+              </svg>
+            </span>
+            ZeroVault
           </div>
           <div className="global-nav-links">
+            <button
+              className={`global-nav-link ${activePage === "dashboard" ? "active" : ""}`}
+              onClick={() => setActivePage("dashboard")}
+            >
+              🏠 Dashboard
+            </button>
             <button
               className={`global-nav-link ${activePage === "wallet" ? "active" : ""}`}
               onClick={() => setActivePage("wallet")}
@@ -32,69 +62,65 @@ export default function App() {
             >
               🍻 Store Terminal
             </button>
+            <button
+              className="global-nav-link logout-btn"
+              onClick={handleLogout}
+              title="Lock vault"
+            >
+              🔒 Lock
+            </button>
           </div>
         </nav>
 
-        {/* Master Header */}
-        <header className="header" style={{ padding: "1.5rem 0 1rem" }}>
-          <div className="header-badge">
-            <span className="dot"></span>
-            Real-time SSI Network
-          </div>
-          <h1 className="header-title" style={{ fontSize: "clamp(2rem, 4vw, 3rem)" }}>
-            <span className="lock-icon">🔐</span> Invisible Identity
-          </h1>
-          <p className="header-subtitle" style={{ fontSize: "0.95rem" }}>
-            Prove who you are — without exposing what you are.
-          </p>
-        </header>
-
-        {/* Active Portal Body */}
+        {/* Page Content */}
         <main style={{ animation: "fadeIn 0.3s ease-out" }} key={activePage}>
+          {activePage === "dashboard" && (
+            <Dashboard onNavigate={setActivePage} />
+          )}
+
           {activePage === "wallet" && (
             <>
+              {/* Sub-header */}
+              <header className="header" style={{ padding: "1.5rem 0 1rem" }}>
+                <div className="header-badge">
+                  <span className="dot"></span>
+                  Real-time SSI Network
+                </div>
+                <h1 className="header-title" style={{ fontSize: "clamp(2rem, 4vw, 3rem)" }}>
+                  <span className="lock-icon">💼</span> Prover Wallet
+                </h1>
+                <p className="header-subtitle" style={{ fontSize: "0.95rem" }}>
+                  Import credentials and generate zero-knowledge proofs.
+                </p>
+              </header>
               <ProverWallet />
               <ProofHistory />
             </>
           )}
-          {activePage === "verifier" && <VerifierPortal />}
-        </main>
 
-        {/* How it Works Flow */}
-        <div className="flow-section" style={{ marginTop: "3rem" }}>
-          <div className="flow-title">How Zero-Knowledge Verification Works</div>
-          <div className="flow-grid">
-            <div className="flow-step">
-              <div className="flow-step-number">1</div>
-              <div className="flow-step-icon">🏛️</div>
-              <div className="flow-step-title">Government Sign</div>
-              <div className="flow-step-desc">
-                Visit the separate Government Identity Portal to get credentials signed.
-              </div>
-            </div>
-            <div className="flow-step">
-              <div className="flow-step-number">2</div>
-              <div className="flow-step-icon">⚙️</div>
-              <div className="flow-step-title">ZK Proof Generated</div>
-              <div className="flow-step-desc">
-                Your device generates a ZK proof verifying signature + claim age.
-              </div>
-            </div>
-            <div className="flow-step">
-              <div className="flow-step-number">3</div>
-              <div className="flow-step-icon">📡</div>
-              <div className="flow-step-title">Real-time Verify</div>
-              <div className="flow-step-desc">
-                Verifier gets YES/NO result instantly over WebSockets.
-              </div>
-            </div>
-          </div>
-        </div>
+          {activePage === "verifier" && (
+            <>
+              <header className="header" style={{ padding: "1.5rem 0 1rem" }}>
+                <div className="header-badge">
+                  <span className="dot"></span>
+                  Real-time SSI Network
+                </div>
+                <h1 className="header-title" style={{ fontSize: "clamp(2rem, 4vw, 3rem)" }}>
+                  <span className="lock-icon">🍻</span> Store Terminal
+                </h1>
+                <p className="header-subtitle" style={{ fontSize: "0.95rem" }}>
+                  Verify ZK proofs in real-time. You never see the customer's raw data.
+                </p>
+              </header>
+              <VerifierPortal />
+            </>
+          )}
+        </main>
 
         {/* Footer */}
         <footer className="footer" style={{ marginTop: "4rem" }}>
           <p>
-            Built with 🔐 by <strong>Invisible Identity</strong> | 
+            Built with 🔐 by <strong>ZeroVault</strong> | 
             100% Client-Side ZK | 
             ECDSA Signatures + WebSockets
           </p>
