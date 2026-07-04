@@ -22,7 +22,7 @@ export function isGeminiConfigured() {
   return isConfigured;
 }
 
-const SYSTEM_CONTEXT = `You are a privacy guide inside "Invisible Identity" — a Zero-Knowledge Identity verification app.
+const SYSTEM_CONTEXT = `You are a privacy guide inside "ZeroVault" — a Zero-Knowledge Identity verification app.
 
 Your role:
 - Explain ZK proofs in simple, friendly terms

@@ -1,4 +1,4 @@
-# 🔐 Invisible Identity — ZK Identity Verifier
+# 🔐 ZeroVault — ZK Identity Verifier
 
 > **Prove who you are — without exposing what you are.**
 
@@ -60,18 +60,20 @@ npm install
 npm run dev
 ```
 
-Open: `http://localhost:5173`
+Open: `http://localhost:5174`
 
 ---
 
 ## 🧪 Demo Flow (5 minutes)
 
-1. **Prover Tab** → Enter birth year `1998` → Click "Generate Age Proof"
+1. **Login Screen** → Unlock with Passkey or enter any PIN
+2. **Dashboard** → View stats and quick-action cards
+3. **Prover Wallet** → Enter birth year `1998` → Click "Generate Age Proof"
    - Point out: birth year is NOT in the proof output (π_a, π_b, π_c)
-2. **Verifier Tab** → Click "Verify Proof" → See ✅ VALID
+4. **Store Terminal** → Click "Verify Proof" → See ✅ VALID
    - Point out: verifier never saw `1998`
-3. **AI Chat** → Click the 🔐 button → Ask "What is a ZK proof?"
-4. **Fraud Demo** → Generate multiple proofs rapidly → See AI flag the pattern
+5. **AI Chat** → Click the 🔐 button → Ask "What is a ZK proof?"
+6. **Fraud Demo** → Generate multiple proofs rapidly → See AI flag the pattern
 
 ---
 
@@ -81,7 +83,7 @@ Open: `http://localhost:5173`
 |---|---|---|
 | ZK Circuits | **Circom 2.0** | Circuit logic (age, income, identity) |
 | ZK Proving | **snarkjs** | Groth16 proofs in browser |
-| Frontend | **React + Vite** | Premium dark-mode UI |
+| Frontend | **React + Vite** | Premium light-mode UI |
 | AI | **Gemini 2.0 Flash** | Privacy guide + fraud detection |
 | Hashing | **Poseidon-style** | ZK-friendly commitments |
 | Storage | **localStorage** | Client-side proof history |
@@ -91,7 +93,7 @@ Open: `http://localhost:5173`
 ## 📁 Project Structure
 
 ```
-zk-identity/
+zerovault/
 ├── circuits/
 │   ├── age_check.circom          ← Prove age ≥ 18
 │   ├── income_range.circom       ← Prove income in bracket
@@ -99,21 +101,23 @@ zk-identity/
 ├── public/circuits/              ← Compiled circuit artifacts
 ├── src/
 │   ├── components/
-│   │   ├── ProverPortal.jsx      ← User proves claims
-│   │   ├── VerifierPortal.jsx    ← Verifier checks proofs
-│   │   ├── GeminiAssistant.jsx   ← AI privacy guide
-│   │   ├── ClaimSelector.jsx     ← Claim type chooser
-│   │   └── ProofHistory.jsx      ← Past proofs
+│   │   ├── LoginScreen.jsx      ← Passkey / PIN unlock screen
+│   │   ├── Dashboard.jsx        ← Unified control panel
+│   │   ├── ProverWallet.jsx     ← User proves claims
+│   │   ├── VerifierPortal.jsx   ← Verifier checks proofs
+│   │   ├── GeminiAssistant.jsx  ← AI privacy guide
+│   │   ├── ClaimSelector.jsx    ← Claim type chooser
+│   │   └── ProofHistory.jsx     ← Past proofs
 │   ├── utils/
-│   │   ├── zkProver.js           ← Proof generation
-│   │   ├── zkVerifier.js         ← Proof verification
-│   │   ├── geminiClient.js       ← Gemini AI wrapper
-│   │   └── poseidonHash.js       ← Identity commitments
+│   │   ├── zkProver.js          ← Proof generation
+│   │   ├── zkVerifier.js        ← Proof verification
+│   │   ├── geminiClient.js      ← Gemini AI wrapper
+│   │   └── poseidonHash.js      ← Identity commitments
 │   ├── App.jsx
 │   ├── main.jsx
-│   └── index.css                 ← Design system
+│   └── index.css                ← Design system
 ├── server/
-│   └── verifyProof.js            ← Express API
+│   └── verifyProof.js           ← Express API
 └── .env                          ← Gemini API key
 ```
 
@@ -126,7 +130,7 @@ zk-identity/
 - **Real-world applicable** — Directly solves India's KYC over-sharing problem
 - **AI-powered** — Gemini adds accessibility AND security (fraud detection)
 - **Scalable** — Same architecture works for any attribute claim
-- **Beautiful** — Premium dark-mode UI with animations and glassmorphism
+- **Beautiful** — Premium UI with glassmorphic login, animated dashboard, and smooth micro-interactions
 
 ---
 

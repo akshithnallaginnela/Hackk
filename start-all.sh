@@ -1,6 +1,6 @@
 #!/bin/bash
 echo "==================================================="
-echo "🔐 Starting Invisible Identity ZK System..."
+echo "🔐 Starting ZeroVault ZK System..."
 echo "==================================================="
 
 # Function to handle cleanup on Ctrl+C
