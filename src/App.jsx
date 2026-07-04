@@ -1,5 +1,5 @@
 import { useState } from "react";
-import LoginScreen from "./components/LoginScreen";
+import AuthScreen from "./components/AuthScreen";
 import Dashboard from "./components/Dashboard";
 import ProverWallet from "./components/ProverWallet";
 import VerifierPortal from "./components/VerifierPortal";
@@ -21,7 +21,7 @@ export default function App() {
   };
 
   if (!isLoggedIn) {
-    return <LoginScreen onLogin={handleLogin} />;
+    return <AuthScreen onLogin={handleLogin} />;
   }
 
   return (
