@@ -361,7 +361,11 @@ export default function AuthScreen({
            ? "linear-gradient(145deg, #faf9f6 0%, #fff7ed 30%, #f5f4ef 60%, #ecfdf5 100%)"
            : "linear-gradient(145deg, #f8fafc 0%, #ede9fe 30%, #f1f5f9 60%, #e0e7ff 100%)"
          }}>
-      <canvas ref={canvasRef} className="auth-particles" />
+      <canvas 
+        ref={canvasRef} 
+        className="auth-particles" 
+        style={{ position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none" }} 
+      />
 
       <div className="auth-container">
         <div className="auth-orb auth-orb-1" style={{ background: `rgba(${accentColor}, 0.12)` }} />
