@@ -15,11 +15,55 @@ import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import dotenv from "dotenv";
 import crypto from "crypto";
+import nodemailer from "nodemailer";
 
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// In-memory tables for real email auth validation
+const pendingRegistrations = new Map(); // email -> { tempId, otp, timestamp }
+const activeOtps = new Map(); // email -> { otp, timestamp }
+
+// Initialize Nodemailer Transport
+let transporter;
+const initNodemailer = async () => {
+  const host = process.env.SMTP_HOST;
+  const port = process.env.SMTP_PORT || 587;
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+
+  if (host && user && pass) {
+    transporter = nodemailer.createTransport({
+      host,
+      port: parseInt(port),
+      secure: port === "465",
+      auth: { user, pass }
+    });
+    console.log("📨 Nodemailer configured with custom SMTP");
+  } else {
+    try {
+      const testAccount = await nodemailer.createTestAccount();
+      transporter = nodemailer.createTransport({
+        host: "smtp.ethereal.email",
+        port: 587,
+        secure: false,
+        auth: {
+          user: testAccount.user,
+          pass: testAccount.pass,
+        },
+      });
+      console.log(`\n📨 Ethereal SMTP test account generated:`);
+      console.log(`   User: ${testAccount.user}`);
+      console.log(`   Pass: ${testAccount.pass}`);
+      console.log(`   Read logs or login at https://ethereal.email/ to preview sent emails!\n`);
+    } catch (err) {
+      console.error("❌ Failed to generate Ethereal SMTP test account:", err);
+    }
+  }
+};
+initNodemailer();
 
 const app = express();
 app.use(cors());
@@ -286,6 +330,200 @@ app.post("/api/verify", async (req, res) => {
     claim: req.body.claim || "unknown",
     verifiedAt: new Date().toISOString(),
   });
+});
+
+// Helper: Generate a random 6-digit passcode
+const generatePasscode = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+// HTTP API: Register Government Temp ID & Send Passcode
+app.post("/api/register-temp-id", async (req, res) => {
+  try {
+    const { tempId, email } = req.body;
+    if (!tempId || !email) {
+      return res.status(400).json({ error: "Temporary ID and Email are required." });
+    }
+
+    const passcode = generatePasscode();
+    
+    // Store in-memory
+    pendingRegistrations.set(email.toLowerCase(), {
+      tempId,
+      otp: passcode,
+      timestamp: Date.now()
+    });
+
+    console.log(`\n🔑 [Gov Onboarding] Generated Code for ${email}: ${passcode} (Temp ID: ${tempId})`);
+
+    // Prepare email
+    let testUrl = null;
+    if (transporter) {
+      const mailOptions = {
+        from: '"ZeroVault Authority" <auth@zerovault.gov.in>',
+        to: email,
+        subject: "ZeroVault Government Access Authorization Credentials",
+        html: `
+          <div style="font-family: -apple-system, sans-serif; max-width: 500px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+            <div style="background: linear-gradient(135deg, #f97316, #ea580c, #059669); padding: 24px; text-align: center; color: white;">
+              <h2 style="margin: 0; font-size: 1.5rem; letter-spacing: 0.5px;">UIDAI Issuer Portal</h2>
+              <p style="margin: 4px 0 0; opacity: 0.9; font-size: 0.85rem;">Official Security Credentials</p>
+            </div>
+            <div style="padding: 24px; background: white;">
+              <p style="margin-top: 0; color: #4a5568; font-size: 0.95rem;">An access request has been initiated for Officer Temp ID: <strong>${tempId}</strong>.</p>
+              <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; text-align: center; margin: 20px 0;">
+                <p style="margin: 0; font-size: 0.75rem; text-transform: uppercase; color: #718096; letter-spacing: 0.5px; font-weight: 700;">Your Security Authorization Passcode</p>
+                <h1 style="margin: 8px 0 0; font-size: 2.2rem; letter-spacing: 4px; color: #ea580c; font-family: monospace;">${passcode}</h1>
+              </div>
+              <p style="color: #718096; font-size: 0.8rem; line-height: 1.4; margin-bottom: 0;">This security code is temporary and valid for single use only. If you did not request this, please contact the network administrator immediately.</p>
+            </div>
+            <div style="background: #f7fafc; padding: 12px; text-align: center; border-top: 1px solid #edf2f7; font-size: 0.7rem; color: #a0aec0;">
+              Government of India · Ministry of Electronics & IT
+            </div>
+          </div>
+        `
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      testUrl = nodemailer.getTestMessageUrl(info);
+      if (testUrl) {
+        console.log(`📩 Ethereal Email Preview: ${testUrl}`);
+      } else {
+        console.log(`📩 Email sent successfully to ${email}`);
+      }
+    }
+
+    res.json({
+      success: true,
+      emailSent: true,
+      testPreviewUrl: testUrl,
+      // Fallback for UI alert if SMTP is not ethereal
+      demoCode: passcode
+    });
+
+  } catch (err) {
+    console.error("Temp ID registration error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// HTTP API: Verify Government Passcode
+app.post("/api/verify-gov-auth", (req, res) => {
+  const { email, otp } = req.body;
+  if (!email || !otp) {
+    return res.status(400).json({ error: "Email and passcode are required." });
+  }
+
+  const record = pendingRegistrations.get(email.toLowerCase());
+  if (!record) {
+    return res.status(400).json({ error: "No pending authorization found for this email." });
+  }
+
+  // Code expiration (e.g., 10 minutes)
+  if (Date.now() - record.timestamp > 10 * 60 * 1000) {
+    pendingRegistrations.delete(email.toLowerCase());
+    return res.status(400).json({ error: "Passcode has expired. Please register again." });
+  }
+
+  if (record.otp !== otp.trim()) {
+    return res.status(400).json({ error: "Invalid passcode. Please try again." });
+  }
+
+  // Clear OTP on success
+  pendingRegistrations.delete(email.toLowerCase());
+  res.json({ success: true });
+});
+
+// HTTP API: Send General Client OTP (ZeroVault Web)
+app.post("/api/auth/send-otp", async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: "Email address is required." });
+    }
+
+    const passcode = generatePasscode();
+    
+    // Store in-memory
+    activeOtps.set(email.toLowerCase(), {
+      otp: passcode,
+      timestamp: Date.now()
+    });
+
+    console.log(`\n🔑 [ZeroVault Web] Generated Code for ${email}: ${passcode}`);
+
+    let testUrl = null;
+    if (transporter) {
+      const mailOptions = {
+        from: '"ZeroVault Security" <security@zerovault.id>',
+        to: email,
+        subject: "ZeroVault Verification Passcode",
+        html: `
+          <div style="font-family: -apple-system, sans-serif; max-width: 500px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+            <div style="background: linear-gradient(135deg, #4f46e5, #7c3aed); padding: 24px; text-align: center; color: white;">
+              <h2 style="margin: 0; font-size: 1.5rem; letter-spacing: 0.5px;">ZeroVault Secure Lock</h2>
+              <p style="margin: 4px 0 0; opacity: 0.9; font-size: 0.85rem;">Identity Wallet Unlock</p>
+            </div>
+            <div style="padding: 24px; background: white;">
+              <p style="margin-top: 0; color: #4a5568; font-size: 0.95rem;">You requested a temporary verification code to unlock your ZeroVault identity credentials.</p>
+              <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; text-align: center; margin: 20px 0;">
+                <p style="margin: 0; font-size: 0.75rem; text-transform: uppercase; color: #718096; letter-spacing: 0.5px; font-weight: 700;">Verification Code</p>
+                <h1 style="margin: 8px 0 0; font-size: 2.2rem; letter-spacing: 4px; color: #4f46e5; font-family: monospace;">${passcode}</h1>
+              </div>
+              <p style="color: #718096; font-size: 0.8rem; line-height: 1.4; margin-bottom: 0;">This code will expire in 10 minutes. If you did not initiate this lock screen request, please secure your credentials immediately.</p>
+            </div>
+            <div style="background: #f7fafc; padding: 12px; text-align: center; border-top: 1px solid #edf2f7; font-size: 0.7rem; color: #a0aec0;">
+              ZeroVault Identity Wallet · 100% Cryptographic ZK
+            </div>
+          </div>
+        `
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      testUrl = nodemailer.getTestMessageUrl(info);
+      if (testUrl) {
+        console.log(`📩 Ethereal Email Preview: ${testUrl}`);
+      } else {
+        console.log(`📩 Email sent successfully to ${email}`);
+      }
+    }
+
+    res.json({
+      success: true,
+      emailSent: true,
+      testPreviewUrl: testUrl,
+      demoCode: passcode
+    });
+
+  } catch (err) {
+    console.error("General OTP sending error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// HTTP API: Verify General OTP
+app.post("/api/auth/verify-otp", (req, res) => {
+  const { email, otp } = req.body;
+  if (!email || !otp) {
+    return res.status(400).json({ error: "Email and OTP passcode are required." });
+  }
+
+  const record = activeOtps.get(email.toLowerCase());
+  if (!record) {
+    return res.status(400).json({ error: "No active verification code found for this email." });
+  }
+
+  if (Date.now() - record.timestamp > 10 * 60 * 1000) {
+    activeOtps.delete(email.toLowerCase());
+    return res.status(400).json({ error: "Verification code has expired. Please send a new one." });
+  }
+
+  if (record.otp !== otp.trim()) {
+    return res.status(400).json({ error: "Invalid verification code. Please try again." });
+  }
+
+  activeOtps.delete(email.toLowerCase());
+  res.json({ success: true });
 });
 
 // Root landing page
