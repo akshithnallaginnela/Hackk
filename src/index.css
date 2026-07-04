@@ -1640,13 +1640,12 @@ body {
 }
 
 /* ========================================================================
-   LOGIN SCREEN
+   AUTH SCREEN — Multi-method Authentication
    ======================================================================== */
-.login-screen {
+.auth-screen {
   position: fixed;
   inset: 0;
   z-index: 1000;
-  background: linear-gradient(145deg, #f8fafc 0%, #ede9fe 30%, #f1f5f9 60%, #e0e7ff 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1654,7 +1653,7 @@ body {
   transition: opacity 0.5s ease, transform 0.5s ease;
 }
 
-.login-screen.login-exit {
+.auth-screen.auth-exit {
   opacity: 0;
   transform: scale(1.05);
   pointer-events: none;
