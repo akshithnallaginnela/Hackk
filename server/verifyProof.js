@@ -407,39 +407,61 @@ async function sendGovernmentEmail(toEmail, subject, title, bodyHtml, alertBoxHt
     to: toEmail,
     subject: `[SECURE] ${subject}`,
     html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #cbd5e1; border-top: 5px solid #ff9933; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
-        <!-- Tricolor Banner -->
-        <div style="background: #1e293b; padding: 20px; color: #ffffff; text-align: center; border-bottom: 3px solid #138808;">
-          <div style="font-size: 0.8rem; letter-spacing: 2px; text-transform: uppercase; color: #94a3b8; font-weight: bold; margin-bottom: 4px;">GOVERNMENT OF INDIA</div>
-          <h2 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: #f8fafc;">MINISTRY OF ELECTRONICS & IT</h2>
-          <div style="font-size: 0.75rem; color: #cbd5e1; margin-top: 4px;">National Informatics Centre (NIC) Gateway Portal</div>
-        </div>
-        
-        <div style="padding: 30px; background: #ffffff;">
-          <h3 style="margin-top: 0; color: #0f172a; font-size: 1.1rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px;">${title}</h3>
-          
-          <div style="color: #334155; font-size: 0.95rem; line-height: 1.6; margin: 20px 0;">
-            ${bodyHtml}
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+          body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 0; }
+          .email-container { max-width: 600px; margin: 40px auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; }
+          .tricolor-stripe { height: 4px; background: linear-gradient(to right, #ff9933 33.3%, #ffffff 33.3%, #ffffff 66.6%, #138808 66.6%); }
+          .header { background-color: #0f172a; padding: 32px 24px; text-align: center; border-bottom: 3px solid #138808; }
+          .header-logo { font-size: 10px; font-weight: 700; color: #94a3b8; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 6px; }
+          .header-title { font-size: 18px; font-weight: 700; color: #ffffff; margin: 0; letter-spacing: 0.5px; }
+          .header-subtitle { font-size: 11px; color: #cbd5e1; margin-top: 6px; letter-spacing: 1px; text-transform: uppercase; font-weight: 500; }
+          .content { padding: 40px 32px; color: #334155; line-height: 1.6; }
+          .section-title { font-size: 16px; font-weight: 600; color: #0f172a; margin-top: 0; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 20px; }
+          .alert-box { background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 24px; text-align: center; margin: 24px 0; }
+          .alert-label { font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 1.5px; margin: 0 0 8px; }
+          .alert-code { font-size: 32px; font-weight: 700; color: #0f172a; letter-spacing: 8px; font-family: 'Courier New', Courier, monospace; margin: 0; text-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+          .disclaimer-box { background-color: #fef2f2; border-left: 4px solid #ef4444; border-radius: 4px; padding: 20px; margin-top: 32px; }
+          .disclaimer-title { font-size: 10px; font-weight: 700; color: #991b1b; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 6px; }
+          .disclaimer-text { font-size: 11px; color: #7f1d1d; margin: 0; line-height: 1.5; }
+          .footer { background-color: #f1f5f9; padding: 24px; text-align: center; font-size: 11px; color: #64748b; border-top: 1px solid #e2e8f0; }
+          .footer-text { margin: 4px 0; line-height: 1.6; }
+          .footer-id { color: #94a3b8; font-size: 10px; font-family: monospace; text-transform: uppercase; margin-top: 12px; display: block; }
+        </style>
+      </head>
+      <body>
+        <div class="email-container">
+          <div class="tricolor-stripe"></div>
+          <div class="header">
+            <div class="header-logo">GOVERNMENT OF INDIA</div>
+            <h2 class="header-title">MINISTRY OF ELECTRONICS & IT</h2>
+            <div class="header-subtitle">National Informatics Centre (NIC) Gateway Portal</div>
           </div>
-          
-          ${alertBoxHtml}
-          
-          <!-- Legal Security Disclaimer -->
-          <div style="background: #f8fafc; border-left: 4px solid #ef4444; border-radius: 4px; padding: 15px; margin-top: 25px;">
-            <p style="margin: 0; font-size: 0.75rem; font-weight: bold; color: #991b1b; text-transform: uppercase; letter-spacing: 0.5px;">SECURITY WARNING & STATUTORY COMPLIANCE</p>
-            <p style="margin: 5px 0 0; font-size: 0.75rem; color: #475569; line-height: 1.4;">
-              This is a restricted security transmission generated by the National Identity Gateway. Under Section 66C (Identity Theft) and Section 66D (Cheating by Impersonation) of the Information Technology Act, 2000, unauthorized access, copying, or tampering of government portals is a cognizable and non-bailable criminal offense punishable with imprisonment and fines.
-            </p>
+          <div class="content">
+            <h3 class="section-title">${title}</h3>
+            <div style="font-size: 14px; color: #334155; margin-bottom: 20px;">
+              ${bodyHtml}
+            </div>
+            ${alertBoxHtml}
+            <div class="disclaimer-box">
+              <p class="disclaimer-title">SECURITY WARNING & STATUTORY COMPLIANCE</p>
+              <p class="disclaimer-text">
+                This is a restricted security transmission generated by the National Identity Gateway. Under Section 66C (Identity Theft) and Section 66D (Cheating by Impersonation) of the Information Technology Act, 2000, unauthorized access, copying, or tampering of government portals is a cognizable and non-bailable criminal offense punishable with imprisonment and fines.
+              </p>
+            </div>
+          </div>
+          <div class="footer">
+            <p class="footer-text">National Security Ops Center (NSOC) · Ministry of Electronics & Information Technology</p>
+            <p class="footer-text">Electronics Niketan, 6 CGO Complex, Lodhi Road, New Delhi: 110003</p>
+            <span class="footer-id">Digital Signature ID: NIC-AUTH-${crypto.randomBytes(6).toString("hex").toUpperCase()} · DO NOT REPLY TO THIS EMAIL</span>
           </div>
         </div>
-        
-        <!-- Footer -->
-        <div style="background: #f1f5f9; padding: 15px; text-align: center; border-top: 1px solid #e2e8f0; font-size: 0.7rem; color: #64748b; line-height: 1.5;">
-          National Security Ops Center (NSOC) · Ministry of Electronics & Information Technology<br>
-          Electronics Niketan, 6 CGO Complex, Lodhi Road, New Delhi: 110003<br>
-          <span style="color: #94a3b8; font-size: 0.65rem;">Digital Signature ID: NIC-AUTH-${crypto.randomBytes(6).toString("hex").toUpperCase()} · DO NOT REPLY TO THIS EMAIL</span>
-        </div>
-      </div>
+      </body>
+      </html>
     `
   };
 
@@ -466,34 +488,57 @@ async function sendClientWalletEmail(toEmail, subject, title, bodyHtml, alertBox
     to: toEmail,
     subject: `[ZeroVault] ${subject}`,
     html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-top: 5px solid #4f46e5; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
-        <div style="background: #0f172a; padding: 20px; color: #ffffff; text-align: center;">
-          <h2 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: #ffffff; letter-spacing: 0.5px;">🔐 ZEROVAULT SECURITY</h2>
-          <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 4px;">Self-Sovereign Cryptographic Lock</div>
-        </div>
-        
-        <div style="padding: 30px; background: #ffffff;">
-          <h3 style="margin-top: 0; color: #0f172a; font-size: 1.1rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px;">${title}</h3>
-          
-          <div style="color: #334155; font-size: 0.95rem; line-height: 1.6; margin: 20px 0;">
-            ${bodyHtml}
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #0b0f19; margin: 0; padding: 0; }
+          .email-container { max-width: 600px; margin: 40px auto; background-color: #111827; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.3); border: 1px solid #1f2937; }
+          .top-glow { height: 6px; background: linear-gradient(90deg, #6366f1 0%, #a855f7 50%, #ec4899 100%); }
+          .header { background-color: #090d16; padding: 36px 24px; text-align: center; }
+          .header-icon { font-size: 32px; margin-bottom: 12px; display: inline-block; }
+          .header-title { font-size: 20px; font-weight: 700; color: #ffffff; margin: 0; letter-spacing: 0.5px; text-transform: uppercase; }
+          .header-subtitle { font-size: 11px; color: #a5b4fc; margin-top: 6px; letter-spacing: 1.5px; text-transform: uppercase; font-weight: 600; }
+          .content { padding: 40px 32px; color: #d1d5db; line-height: 1.7; }
+          .section-title { font-size: 16px; font-weight: 600; color: #ffffff; margin-top: 0; border-bottom: 1px solid #1f2937; padding-bottom: 12px; margin-bottom: 24px; }
+          .privacy-box { background-color: #1e1b4b; border-left: 4px solid #6366f1; border-radius: 8px; padding: 20px; margin-top: 32px; }
+          .privacy-title { font-size: 10px; font-weight: 700; color: #a5b4fc; text-transform: uppercase; letter-spacing: 1.5px; margin: 0 0 6px; }
+          .privacy-text { font-size: 11px; color: #c7d2fe; margin: 0; line-height: 1.6; }
+          .footer { background-color: #090d16; padding: 28px; text-align: center; font-size: 11px; color: #6b7280; border-top: 1px solid #1f2937; }
+          .footer-text { margin: 4px 0; }
+          .footer-id { color: #4b5563; font-size: 10px; font-family: monospace; text-transform: uppercase; margin-top: 12px; display: block; }
+        </style>
+      </head>
+      <body>
+        <div class="email-container">
+          <div class="top-glow"></div>
+          <div class="header">
+            <div class="header-icon">🔐</div>
+            <h2 class="header-title">ZEROVAULT SECURITY</h2>
+            <div class="header-subtitle">Self-Sovereign Cryptographic Lock</div>
           </div>
-          
-          ${alertBoxHtml}
-          
-          <div style="background: #f8fafc; border-left: 4px solid #4f46e5; border-radius: 4px; padding: 15px; margin-top: 25px;">
-            <p style="margin: 0; font-size: 0.75rem; font-weight: bold; color: #4338ca; text-transform: uppercase; letter-spacing: 0.5px;">Privacy Protection Statement</p>
-            <p style="margin: 5px 0 0; font-size: 0.75rem; color: #475569; line-height: 1.4;">
-              ZeroVault utilizes advanced client-side Zero-Knowledge Proofs. Your private credentials, biometrics, and security keys never leave your device. The server only performs requested cryptographic comparisons and secure mail handshakes.
-            </p>
+          <div class="content">
+            <h3 class="section-title">${title}</h3>
+            <div style="font-size: 14px; color: #d1d5db; margin-bottom: 20px;">
+              ${bodyHtml}
+            </div>
+            ${alertBoxHtml}
+            <div class="privacy-box">
+              <p class="privacy-title">Privacy Protection Statement</p>
+              <p class="privacy-text">
+                ZeroVault utilizes advanced client-side Zero-Knowledge Proofs. Your private credentials, biometrics, and security keys never leave your device. The server only performs requested cryptographic comparisons and secure mail handshakes.
+              </p>
+            </div>
+          </div>
+          <div class="footer">
+            <p class="footer-text">ZeroVault Inc. · Automated Security Services Network</p>
+            <span class="footer-id">System Reference ID: ZV-SEC-${crypto.randomBytes(6).toString("hex").toUpperCase()}</span>
           </div>
         </div>
-        
-        <div style="background: #f8fafc; padding: 15px; text-align: center; border-top: 1px solid #e2e8f0; font-size: 0.7rem; color: #64748b;">
-          ZeroVault Inc. · Automated Security Services Network<br>
-          <span style="color: #cbd5e1; font-size: 0.65rem;">System Reference ID: ZV-SEC-${crypto.randomBytes(6).toString("hex").toUpperCase()}</span>
-        </div>
-      </div>
+      </body>
+      </html>
     `
   };
 
