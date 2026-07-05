@@ -65,6 +65,7 @@ export default function TutorialWizard({ onComplete }) {
       }
 
       // Completed onboarding
+      localStorage.setItem("zerovault_user_email", data.user.email);
       onComplete(data.user);
     } catch (err) {
       setError(err.message);
