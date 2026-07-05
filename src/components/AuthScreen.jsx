@@ -1,57 +1,60 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from 'react';
+import { supabase } from '../utils/supabaseClient';
+import { captureEnrollment, verifyFace, loadModels } from '../utils/faceBiometrics';
 
-/**
- * AuthScreen — Multi-method authentication with real biometrics, 
- * live webcam Face ID matching, SMTP OTP verification, and secure PIN validation.
- */
-export default function AuthScreen({
-  onLogin,
-  theme = "vault",
-  title = "ZeroVault",
-  subtitle = "Prove who you are — without exposing what you are.",
-}) {
-  const [screen, setScreen] = useState("methods"); // methods | fingerprint | face | email | pin | register | success
+// State Machine Steps
+const STEPS = {
+  EMAIL_INPUT: 'EMAIL_INPUT',
+  OTP_VERIFY: 'OTP_VERIFY',
+  FACE_PREPARE: 'FACE_PREPARE', // loading models
+  FACE_ENROLL: 'FACE_ENROLL',
+  FACE_LOGIN: 'FACE_LOGIN',
+  SUCCESS: 'SUCCESS'
+};
+
+export default function AuthScreen({ onLogin, theme = 'vault', title = 'ZeroVault' }) {
+  const [step, setStep] = useState(STEPS.EMAIL_INPUT);
+  const [email, setEmail] = useState('');
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
-  const [pin, setPin] = useState("");
-  const [email, setEmail] = useState(() => localStorage.getItem("zerovault_user_email") || "");
-  const [emailOtp, setEmailOtp] = useState("");
-  const [emailSent, setEmailSent] = useState(false);
-  const [tempId, setTempId] = useState("");
-  const [error, setError] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-
-  // Target email capture if not cached
-  const [emailInput, setEmailInput] = useState("");
-  const [emailLocked, setEmailLocked] = useState(!!localStorage.getItem("zerovault_user_email"));
+  const [retryCount, setRetryCount] = useState(0);
+  const [countdown, setCountdown] = useState(0);
   
-  // Real camera state
   const [videoStream, setVideoStream] = useState(null);
   const videoRef = useRef(null);
-  
-  // Developer test previews
-  const [devMailLink, setDevMailLink] = useState(null);
-  const [devMailCode, setDevMailCode] = useState(null);
+  const otpRefs = useRef([]);
 
-  const canvasRef = useRef(null);
-  const animFrameRef = useRef(null);
+  const isGov = theme === 'gov';
+  const accentHex = isGov ? '#f97316' : '#4f46e5';
 
-  const isGov = theme === "gov";
-  const accentColor = isGov ? "249, 115, 22" : "79, 70, 229";
-  const accentHex = isGov ? "#f97316" : "#4f46e5";
-  const secondaryHex = isGov ? "#059669" : "#7c3aed";
-
-  const getBackendUrl = () => {
-    return import.meta.env.VITE_BACKEND_URL || "http://localhost:8080";
-  };
-
-
-
-  // Clean up media streams when changing screens
+  // Handle Supabase Auth State changes
   useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        // OTP succeeded, check if face is enrolled
+        setStep(STEPS.FACE_PREPARE);
+        await checkFaceEnrollment(session.user.id);
+      } else if (event === 'SIGNED_OUT') {
+        stopWebcam();
+        setStep(STEPS.EMAIL_INPUT);
+      }
+    });
+
     return () => {
+      subscription.unsubscribe();
       stopWebcam();
     };
-  }, [screen]);
+  }, []);
+
+  // OTP Cooldown timer
+  useEffect(() => {
+    if (countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [countdown]);
 
   const stopWebcam = () => {
     if (videoStream) {
@@ -60,499 +63,279 @@ export default function AuthScreen({
     }
   };
 
-  // Start Real Webcam & Perform Biometric Verification
-  const startWebcamVerification = async (targetEmail) => {
-    setError("");
-    setScanProgress(0);
+  const startWebcam = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 320, height: 320, facingMode: "user" }
-      });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 320, facingMode: 'user' } });
       setVideoStream(stream);
-      
-      setTimeout(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
-      }, 50);
-
-      // Perform a simulated progressive visual scan, then capture and verify!
-      let p = 0;
-      const interval = setInterval(async () => {
-        p += Math.random() * 8 + 4;
-        if (p >= 100) {
-          p = 100;
-          clearInterval(interval);
-          setScanProgress(100);
-          
-          // Capture photo from video stream
-          if (videoRef.current) {
-            const canvas = document.createElement("canvas");
-            canvas.width = 320;
-            canvas.height = 320;
-            const ctx = canvas.getContext("2d");
-            ctx.drawImage(videoRef.current, 0, 0, 320, 320);
-            const capturedFrame = canvas.toDataURL("image/jpeg");
-
-            // Stop camera stream immediately
-            stream.getTracks().forEach((track) => track.stop());
-            setVideoStream(null);
-
-            // Call Face Verification API
-            try {
-              const endpoint = isGov ? "/api/auth/employee/login-face" : "/api/auth/wallet/login-face";
-              const response = await fetch(`${getBackendUrl()}${endpoint}`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email: targetEmail, capturedPhoto: capturedFrame })
-              });
-
-              const data = await response.json();
-              if (!response.ok) {
-                throw new Error(data.error || "Biometric validation mismatch.");
-              }
-
-              setScreen("success");
-              localStorage.setItem("zerovault_user_email", data.user.email);
-              setTimeout(() => onLogin(data.user), 700);
-            } catch (err) {
-              console.error(err);
-              setError(`❌ Face ID Verification Failed: ${err.message}`);
-              setScreen("methods");
-            }
-          }
-        } else {
-          setScanProgress(Math.min(p, 100));
-        }
-      }, 100);
-
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
     } catch (err) {
-      console.error("Camera access failed:", err);
-      setError("❌ Camera Error: Camera access denied or webcam already in use.");
-      setScreen("methods");
+      setError('Camera access denied. Please grant permission to continue.');
     }
   };
 
-  const handleMethodSelect = (method) => {
-    setError("");
-    setDevMailLink(null);
-    setDevMailCode(null);
+  const handleEmailSubmit = async (e) => {
+    e.preventDefault();
+    if (!email || !email.includes('@')) { setError('Enter a valid email.'); return; }
+    setError('');
+    setLoading(true);
 
-    const activeEmail = email || emailInput;
-    if (!activeEmail && method !== "register") {
-      setError("Please input your registered email address first.");
+    try {
+      const { error: signInError } = await supabase.auth.signInWithOtp({ email });
+      if (signInError) throw signInError;
+      
+      setCountdown(30);
+      setStep(STEPS.OTP_VERIFY);
+    } catch (err) {
+      setError(`OTP Error: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (countdown > 0) return;
+    setError('');
+    setLoading(true);
+    try {
+      const { error: resendError } = await supabase.auth.signInWithOtp({ email });
+      if (resendError) throw resendError;
+      setCountdown(30);
+    } catch (err) {
+      setError(`Resend Error: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOtpChange = (index, value) => {
+    if (!/^\d*$/.test(value)) return;
+    const newOtp = [...otp];
+    newOtp[index] = value;
+    setOtp(newOtp);
+
+    // Auto-advance
+    if (value && index < 5) {
+      otpRefs.current[index + 1].focus();
+    }
+    
+    if (newOtp.every(d => d !== '')) {
+      verifyOtp(newOtp.join(''));
+    }
+  };
+
+  const handleOtpKeyDown = (index, e) => {
+    if (e.key === 'Backspace' && !otp[index] && index > 0) {
+      otpRefs.current[index - 1].focus();
+    }
+  };
+
+  const verifyOtp = async (token) => {
+    setError('');
+    setLoading(true);
+    try {
+      const { error: verifyError } = await supabase.auth.verifyOtp({ email, token, type: 'email' });
+      if (verifyError) throw verifyError;
+      // onAuthStateChange will catch the SIGNED_IN event
+    } catch (err) {
+      setError('Invalid or expired code.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const checkFaceEnrollment = async (userId) => {
+    try {
+      setLoading(true);
+      await loadModels(); // load face-api models
+      
+      const { data, error: fetchError } = await supabase
+        .from('user_face_descriptors')
+        .select('descriptor')
+        .eq('user_id', userId)
+        .single();
+        
+      await startWebcam();
+      setLoading(false);
+
+      if (data && data.descriptor) {
+        setStep(STEPS.FACE_LOGIN);
+        doFaceLogin(data.descriptor);
+      } else {
+        setStep(STEPS.FACE_ENROLL);
+      }
+    } catch (err) {
+      setError(`Biometric setup failed: ${err.message}`);
+      setLoading(false);
+    }
+  };
+
+  const doFaceEnrollment = async () => {
+    setError('');
+    setScanProgress(0);
+    try {
+      // Capture 4 frames over 2 seconds
+      const descriptorArray = await captureEnrollment(videoRef.current, (prog) => {
+        setScanProgress(prog);
+      });
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      // Store in Supabase
+      const { error: insertError } = await supabase
+        .from('user_face_descriptors')
+        .insert({ user_id: session.user.id, descriptor: descriptorArray });
+
+      if (insertError) throw insertError;
+      
+      handleSuccess(session.user);
+    } catch (err) {
+      setError(`Enrollment failed: ${err.message}`);
+      setScanProgress(0);
+    }
+  };
+
+  const doFaceLogin = async (storedDescriptor) => {
+    if (retryCount >= 3) {
+      setError('Max retries exceeded. Please contact support or use account recovery.');
       return;
     }
-
-    if (method === "face") {
-      setScreen("face");
-      startWebcamVerification(activeEmail);
-    } else {
-      setScreen(method);
-    }
-  };
-
-  // PIN authentication submission
-  const handlePinSubmit = async (e) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError("");
-    const activeEmail = email || emailInput;
-    if (!activeEmail) { setError("Email address is required."); setIsLoading(false); return; }
-    if (pin.length < 4) { setError("PIN must be at least 4 digits."); setIsLoading(false); return; }
-
-    try {
-      const endpoint = isGov ? "/api/auth/employee/login-pin" : "/api/auth/wallet/login-pin";
-      const response = await fetch(`${getBackendUrl()}${endpoint}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: activeEmail, pin })
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Access Denied: PIN verification mismatch.");
-      }
-
-      setScreen("success");
-      localStorage.setItem("zerovault_user_email", data.user.email);
-      setTimeout(() => onLogin(data.user), 700);
-    } catch (err) {
-      setError(`❌ Login Failed: ${err.message}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Send login OTP (hits server API)
-  const handleEmailSend = async (e) => {
-    e.preventDefault();
-    setIsLoading(true);
-    const activeEmail = email || emailInput;
-    if (!activeEmail || !activeEmail.includes("@")) { setError("Enter a valid email address."); setIsLoading(false); return; }
-    setError("");
+    
+    setError('');
+    setScanProgress(30); // Show some visual feedback that matching started
     
     try {
-      const response = await fetch(`${getBackendUrl()}/api/auth/send-login-otp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: activeEmail, portalType: isGov ? "gov" : "wallet" })
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to dispatch authentication code.");
+      const result = await verifyFace(videoRef.current, storedDescriptor);
+      if (result.matched) {
+        setScanProgress(100);
+        const { data: { session } } = await supabase.auth.getSession();
+        handleSuccess(session.user);
       }
-
-      setEmailSent(true);
-      if (data.testPreviewUrl) setDevMailLink(data.testPreviewUrl);
-      if (data.demoCode) setDevMailCode(data.demoCode);
     } catch (err) {
-      setError(`❌ OTP Error: ${err.message}`);
-    } finally {
-      setIsLoading(false);
+      setRetryCount(prev => prev + 1);
+      setError(`${err.message} (Attempt ${retryCount + 1} of 3)`);
+      setScanProgress(0);
     }
   };
 
-  // Verify OTP submission
-  const handleEmailVerify = async (e) => {
-    e.preventDefault();
-    setIsLoading(true);
-    const activeEmail = email || emailInput;
-    if (emailOtp.length !== 6) { setError("Enter 6-digit verification code."); setIsLoading(false); return; }
-    setError("");
-
-    try {
-      const response = await fetch(`${getBackendUrl()}/api/auth/verify-login-otp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: activeEmail, otp: emailOtp, portalType: isGov ? "gov" : "wallet" })
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Verification code mismatch.");
-      }
-
-      setScreen("success");
-      localStorage.setItem("zerovault_user_email", data.user.email);
-      setTimeout(() => onLogin(data.user), 700);
-    } catch (err) {
-      setError(`❌ Verification Failed: ${err.message}`);
-    }
-  };
-
-  // First Onboarding (Gov only, Temp ID -> Temp PIN)
-  const handleOnboardSubmit = async (e) => {
-    e.preventDefault();
-    const activeEmail = email || emailInput;
-    if (!tempId.trim()) { setError("Access ID is required."); return; }
-    if (!activeEmail || !activeEmail.includes("@")) { setError("Official email is required."); return; }
-    setError("");
-
-    try {
-      const response = await fetch(`${getBackendUrl()}/api/auth/employee/onboard`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tempId: tempId.trim(), email: activeEmail })
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to process onboarding registration.");
-      }
-
-      setEmailSent(true);
-      setScreen("email"); // Redirect to the passcode input page
-      if (data.testPreviewUrl) setDevMailLink(data.testPreviewUrl);
-      if (data.demoCode) setDevMailCode(data.demoCode);
-    } catch (err) {
-      setError(`❌ Onboarding Failed: ${err.message}`);
-    }
-  };
-
-  const handleLockReset = () => {
-    localStorage.removeItem("zerovault_user_email");
-    setEmail("");
-    setEmailInput("");
-    setEmailLocked(false);
-    setError("");
-  };
-
-  const goBack = () => {
+  const handleSuccess = (user) => {
     stopWebcam();
-    setScreen("methods");
-    setError("");
-    setPin("");
-    setEmailOtp("");
-    setEmailSent(false);
-    setScanProgress(0);
-    setDevMailLink(null);
-    setDevMailCode(null);
+    setStep(STEPS.SUCCESS);
+    setTimeout(() => onLogin(user), 800);
   };
 
   return (
-    <div className={`auth-screen ${screen === "success" ? "auth-exit" : ""}`}
-         style={{ background: isGov
-           ? "linear-gradient(145deg, #faf9f6 0%, #fff7ed 30%, #f5f4ef 60%, #ecfdf5 100%)"
-           : "linear-gradient(145deg, #09090e 0%, #111122 30%, #080812 60%, #0f172a 100%)"
-         }}>
-
-
+    <div className={`auth-screen ${step === STEPS.SUCCESS ? 'auth-exit' : ''}`}
+         style={{ background: isGov ? 'linear-gradient(145deg, #faf9f6 0%, #fff7ed 30%, #f5f4ef 60%, #ecfdf5 100%)' : 'linear-gradient(145deg, #09090e 0%, #111122 30%, #080812 60%, #0f172a 100%)' }}>
+      
       <div className="auth-container">
-        <div className="auth-orb auth-orb-1" style={{ background: `rgba(${accentColor}, 0.1)` }} />
-        <div className="auth-orb auth-orb-2" style={{ background: `rgba(${accentColor}, 0.06)` }} />
-
-
-        <div className="auth-card" style={{ background: isGov ? "rgba(255, 255, 255, 0.85)" : "rgba(17, 17, 27, 0.65)", color: isGov ? "#0f172a" : "#f8fafc" }}>
+        <div className="auth-card" style={{ background: isGov ? 'rgba(255, 255, 255, 0.85)' : 'rgba(17, 17, 27, 0.65)', color: isGov ? '#0f172a' : '#f8fafc' }}>
           
-          {/* Brand Header */}
-          <div className="auth-brand">
-            <div className="auth-logo">
-              <div className="auth-logo-icon">
-                {isGov ? <span style={{ fontSize: "2rem" }}>🏛️</span> : <span style={{ fontSize: "2rem" }}>🔐</span>}
-              </div>
-              <div className="auth-logo-ring" style={{ borderColor: `rgba(${accentColor}, 0.15)` }} />
-            </div>
-            <h1 className="auth-title" style={{
-              background: isGov
-                ? "linear-gradient(135deg, #f97316, #ea580c, #059669)"
-                : "linear-gradient(135deg, #a5b4fc, #818cf8, #22d3ee)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              backgroundClip: "text",
-            }}>{title}</h1>
-            <p className="auth-tagline" style={{ color: isGov ? "#475569" : "#94a3b8" }}>{subtitle}</p>
+          <div className="auth-brand" style={{ textAlign: 'center', marginBottom: '2rem' }}>
+            <h1 className="auth-title" style={{ background: `linear-gradient(135deg, ${accentHex}, ${isGov ? '#ea580c' : '#818cf8'})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{title}</h1>
+            <p style={{ color: isGov ? '#475569' : '#94a3b8', fontSize: '0.85rem' }}>Secure Two-Factor Identity Portal</p>
           </div>
 
-          {error && <div className="auth-error-box" style={{ marginBottom: "1rem" }}>{error}</div>}
+          {error && <div className="auth-error-box" style={{ padding: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', borderRadius: '8px', color: '#ef4444', marginBottom: '1rem', fontSize: '0.85rem' }}>{error}</div>}
 
-          {/* Email input field if not cached */}
-          {screen === "methods" && !emailLocked && (
-            <div style={{ marginBottom: "1.25rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-              <label className="auth-input-label" style={{ color: isGov ? "#334155" : "#94a3b8" }}>Verify Profile Email Address</label>
-              <input
-                type="email"
-                value={emailInput}
-                onChange={(e) => setEmailInput(e.target.value)}
-                className="auth-text-input"
-                placeholder="officer@zerovault.gov.in"
-                style={{ background: isGov ? "#ffffff" : "rgba(255,255,255,0.02)", color: isGov ? "#0f172a" : "#ffffff", border: "1px solid rgba(255,255,255,0.08)" }}
-              />
-            </div>
-          )}
-
-          {screen === "methods" && emailLocked && (
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: isGov ? "#f1f5f9" : "rgba(255,255,255,0.03)", padding: "10px 14px", borderRadius: "8px", marginBottom: "1.25rem", border: "1px solid rgba(255,255,255,0.05)" }}>
-              <span style={{ fontSize: "0.85rem", color: isGov ? "#475569" : "#a5b4fc" }}>📧 Profile: <strong>{email}</strong></span>
-              <button onClick={handleLockReset} style={{ background: "none", border: "none", color: "#ef4444", fontSize: "0.75rem", cursor: "pointer", fontWeight: 600 }}>Switch</button>
-            </div>
-          )}
-
-          {/* ===== Method Selection ===== */}
-          {screen === "methods" && (
-            <div className="auth-methods-grid" style={{ animation: "fadeIn 0.4s ease-out" }}>
-              <button className="auth-method-btn" onClick={() => handleMethodSelect("face")} style={{ "--accent": accentHex, color: isGov ? "#0f172a" : "#ffffff" }}>
-                <div className="auth-method-icon">👤</div>
-                <div className="auth-method-info">
-                  <span className="auth-method-label">Biometric Face ID</span>
-                  <span className="auth-method-desc">Live camera analysis</span>
-                </div>
-              </button>
-
-              <button className="auth-method-btn" onClick={() => handleMethodSelect("email")} style={{ "--accent": accentHex, color: isGov ? "#0f172a" : "#ffffff" }}>
-                <div className="auth-method-icon">✉️</div>
-                <div className="auth-method-info">
-                  <span className="auth-method-label">Email OTP Lock</span>
-                  <span className="auth-method-desc">6-digit SMTP passcode</span>
-                </div>
-              </button>
-
-              <button className="auth-method-btn" onClick={() => handleMethodSelect("pin")} style={{ "--accent": accentHex, color: isGov ? "#0f172a" : "#ffffff" }}>
-                <div className="auth-method-icon">🔑</div>
-                <div className="auth-method-info">
-                  <span className="auth-method-label">Numeric Vault PIN</span>
-                  <span className="auth-method-desc">Local security key</span>
-                </div>
-              </button>
-
-              {isGov && (
-                <div style={{ marginTop: "1rem", textAlign: "center", width: "100%" }}>
-                  <button className="auth-btn-link" onClick={() => setScreen("register")} style={{ color: accentHex, background: "none", border: "none", cursor: "pointer", fontSize: "0.85rem" }}>
-                    🇮🇳 First Onboarding? Click Here
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ===== Webcam Face ID ===== */}
-          {screen === "face" && (
-            <div className="auth-scan-view" style={{ animation: "fadeIn 0.3s ease-out" }}>
-              <div className="auth-face-camera-container">
-                {videoStream ? (
-                  <video ref={videoRef} autoPlay playsInline muted className="auth-face-camera-video" />
-                ) : (
-                  <div className="auth-face-camera-placeholder">👤</div>
-                )}
-                
-                <div className="auth-face-scanline" style={{ background: `linear-gradient(180deg, transparent, rgba(${accentColor}, 0.25), transparent)` }} />
-                <div className="auth-face-corner tl" style={{ borderColor: accentHex }} />
-                <div className="auth-face-corner tr" style={{ borderColor: accentHex }} />
-                <div className="auth-face-corner bl" style={{ borderColor: accentHex }} />
-                <div className="auth-face-corner br" style={{ borderColor: accentHex }} />
-              </div>
-              <p className="auth-scan-label">
-                {scanProgress < 100 ? `Analyzing facial geometry (${Math.floor(scanProgress)}%)...` : "Processing AI biometrics verification..."}
-              </p>
-              <div className="auth-progress-bar" style={{ width: "80%", marginBottom: "1rem" }}>
-                <div className="auth-progress-fill" style={{ width: `${scanProgress}%`, background: `linear-gradient(90deg, ${accentHex}, ${secondaryHex})` }} />
-              </div>
-              
-              <div style={{ background: isGov ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.05)", padding: "0.75rem", borderRadius: "8px", fontSize: "0.75rem", color: isGov ? "#475569" : "#94a3b8", textAlign: "left", lineHeight: 1.5, width: "100%", maxWidth: "320px" }}>
-                <strong>Enrollment:</strong> Your first scan is converted into a mathematical descriptor number set. We store this descriptor, never your photo. <br />
-                <strong>Login:</strong> Each login takes a fresh scan and compares it mathematically to your descriptor. If it doesn't match closely enough, access is denied. <br />
-                <strong>Tips:</strong> Ensure good lighting • Look directly at camera • Remove sunglasses/masks • Only one face in frame.
-              </div>
-
-              <button type="button" className="auth-btn auth-btn-ghost" onClick={goBack} style={{ marginTop: "1rem" }}>Cancel</button>
-            </div>
-          )}
-
-          {/* ===== Government Employee First Onboarding ===== */}
-          {screen === "register" && (
-            <form className="auth-code-form" onSubmit={handleOnboardSubmit} style={{ animation: "fadeIn 0.3s ease-out" }}>
-              <p className="auth-code-label">Request Official Authentication Credentials</p>
-              
+          {/* Step 1: Email Input */}
+          {step === STEPS.EMAIL_INPUT && (
+            <form onSubmit={handleEmailSubmit}>
               <div className="auth-input-group">
-                <label className="auth-input-label">Gov Temp Access ID</label>
-                <input 
-                  type="text" 
-                  value={tempId} 
-                  onChange={(e) => setTempId(e.target.value.toUpperCase())}
-                  className="auth-text-input" 
-                  placeholder="e.g. GOV-EMP-101" 
-                  style={{ background: "#ffffff", color: "#0f172a" }}
-                  required
-                />
+                <label className="auth-input-label">Email Address</label>
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="auth-text-input" placeholder="you@example.com" required autoFocus 
+                  style={{ background: isGov ? '#fff' : 'rgba(255,255,255,0.05)', color: isGov ? '#000' : '#fff', border: '1px solid rgba(150,150,150,0.2)' }}/>
               </div>
-
-              <div className="auth-input-group">
-                <label className="auth-input-label">Official Mail Address</label>
-                <input 
-                  type="email" 
-                  value={email || emailInput} 
-                  onChange={(e) => {
-                    setEmailInput(e.target.value);
-                    setEmail(e.target.value);
-                  }}
-                  className="auth-text-input" 
-                  placeholder="officer@zerovault.gov.in" 
-                  style={{ background: "#ffffff", color: "#0f172a" }}
-                  required
-                />
-              </div>
-
-              <div className="auth-btn-row" style={{ marginTop: "1rem" }}>
-                <button type="button" className="auth-btn auth-btn-ghost" onClick={goBack}>Back</button>
-                <button type="submit" className="auth-btn auth-btn-primary" style={{ background: accentHex, flex: 2 }}>
-                  Request PIN Credentials
-                </button>
-              </div>
+              <button type="submit" className="auth-btn auth-btn-primary" style={{ background: accentHex, width: '100%', marginTop: '1rem' }} disabled={loading}>
+                {loading ? 'Processing...' : 'Continue'}
+              </button>
             </form>
           )}
 
-          {/* ===== Email OTP Verification ===== */}
-          {screen === "email" && (
-            <div className="auth-code-form" style={{ animation: "fadeIn 0.3s ease-out" }}>
-              {!emailSent ? (
-                <form onSubmit={handleEmailSend}>
-                  <div className="auth-email-icon-wrap">
-                    <span style={{ fontSize: "2.5rem" }}>✉️</span>
-                  </div>
-                  <p className="auth-code-label" style={{ marginBottom: "0.25rem" }}>We'll send a quick-expiring code to confirm you control this email.</p>
-                  <p style={{ fontSize: "0.75rem", color: isGov ? "#64748b" : "#94a3b8", marginBottom: "1rem", lineHeight: 1.4, textAlign: "center" }}>
-                    If it isn't arriving, check your spam and confirm the email is typed correctly.
-                    <br />(We verify the code directly — we will never ask you to read it back.)
-                  </p>
-                  <input type="email" value={email || emailInput} onChange={(e) => setEmailInput(e.target.value)}
-                    className="auth-email-input" placeholder="you@example.com" autoFocus
-                    style={{ "--accent": accentHex, background: isGov ? "#ffffff" : "rgba(0,0,0,0.2)", color: isGov ? "#0f172a" : "#ffffff" }}
+          {/* Step 2: OTP Verification */}
+          {step === STEPS.OTP_VERIFY && (
+            <div style={{ textAlign: 'center' }}>
+              <p style={{ fontSize: '0.9rem', marginBottom: '1rem' }}>Enter the 6-digit code sent to <strong>{email}</strong></p>
+              
+              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', marginBottom: '1.5rem' }}>
+                {otp.map((digit, idx) => (
+                  <input key={idx} ref={el => otpRefs.current[idx] = el} type="text" maxLength={1} value={digit}
+                    onChange={e => handleOtpChange(idx, e.target.value)}
+                    onKeyDown={e => handleOtpKeyDown(idx, e)}
+                    style={{ width: '40px', height: '48px', textAlign: 'center', fontSize: '1.25rem', borderRadius: '8px', background: isGov ? '#fff' : 'rgba(255,255,255,0.05)', color: isGov ? '#000' : '#fff', border: `1px solid ${accentHex}` }}
                   />
-                  <div className="auth-btn-row">
-                    <button type="button" className="auth-btn auth-btn-ghost" onClick={goBack} disabled={isLoading}>Back</button>
-                    <button type="submit" className="auth-btn auth-btn-primary"
-                      style={{ background: accentHex, flex: 2 }} disabled={isLoading}>{isLoading ? "Processing..." : "Send OTP Code"}</button>
-                  </div>
-                </form>
-              ) : (
-                <form onSubmit={handleEmailVerify}>
-                  <div className="auth-email-sent">
-                    <div className="auth-email-sent-icon">📬</div>
-                    <p className="auth-email-sent-text">Passcode generated and dispatched to <strong>{email || emailInput}</strong></p>
-                  </div>
-                  <p className="auth-code-label" style={{ marginTop: "1rem" }}>Enter 6-digit passcode</p>
-                  <div className="auth-code-input-row">
-                    <input type="text" maxLength={6} value={emailOtp}
-                      onChange={(e) => setEmailOtp(e.target.value.replace(/\D/g, ""))}
-                      className="auth-code-input" placeholder="000000" autoFocus
-                      style={{ "--accent": accentHex, background: isGov ? "#ffffff" : "rgba(0,0,0,0.2)", color: isGov ? "#0f172a" : "#ffffff" }}
-                    />
-                  </div>
-                  <div className="auth-btn-row" style={{ marginTop: "1.5rem" }}>
-                    <button type="button" className="auth-btn auth-btn-ghost" onClick={goBack} disabled={isLoading}>Back</button>
-                    <button type="submit" className="auth-btn auth-btn-primary"
-                      style={{ background: accentHex, flex: 2 }} disabled={isLoading}>{isLoading ? "Verifying..." : "Unlock Portal"}</button>
-                  </div>
-                </form>
+                ))}
+              </div>
+              
+              <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+                {countdown > 0 ? `Resend code in ${countdown}s` : <button onClick={handleResendOtp} style={{ background: 'none', border: 'none', color: accentHex, cursor: 'pointer' }}>Resend Code</button>}
+              </div>
+              
+              <button onClick={() => setStep(STEPS.EMAIL_INPUT)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', marginTop: '1rem', fontSize: '0.8rem' }}>Change Email</button>
+            </div>
+          )}
+
+          {/* Step 3: Face Loading */}
+          {step === STEPS.FACE_PREPARE && (
+            <div style={{ textAlign: 'center', padding: '2rem' }}>
+              <div className="spinner" style={{ margin: '0 auto 1rem', width: '30px', height: '30px', border: `3px solid rgba(0,0,0,0.1)`, borderTopColor: accentHex, borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+              <p>Initializing AI Biometrics...</p>
+            </div>
+          )}
+
+          {/* Step 4: Face Enroll / Login */}
+          {(step === STEPS.FACE_ENROLL || step === STEPS.FACE_LOGIN) && (
+            <div className="auth-scan-view" style={{ textAlign: 'center' }}>
+              <h3 style={{ margin: '0 0 1rem 0' }}>{step === STEPS.FACE_ENROLL ? 'Face Enrollment' : 'Face Verification'}</h3>
+              
+              <div className="auth-face-camera-container" style={{ position: 'relative', width: '200px', height: '200px', margin: '0 auto 1rem', borderRadius: '50%', overflow: 'hidden', border: `4px solid ${scanProgress === 100 ? '#10b981' : accentHex}` }}>
+                {videoStream ? (
+                  <video ref={videoRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }} />
+                ) : (
+                  <div style={{ background: '#334155', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>👤</div>
+                )}
+              </div>
+              
+              <div className="auth-progress-bar" style={{ width: '80%', margin: '0 auto 1rem', height: '4px', background: 'rgba(150,150,150,0.2)', borderRadius: '2px' }}>
+                <div style={{ width: `${scanProgress}%`, background: accentHex, height: '100%', transition: 'width 0.3s ease' }} />
+              </div>
+
+              {step === STEPS.FACE_ENROLL && (
+                <>
+                  <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: '1rem' }}>We'll capture 4 frames to build a stable mathematical descriptor. Look straight at the camera.</p>
+                  <button onClick={doFaceEnrollment} className="auth-btn auth-btn-primary" style={{ background: accentHex, width: '100%' }}>Start Scan</button>
+                </>
+              )}
+
+              {step === STEPS.FACE_LOGIN && (
+                <>
+                  <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: '1rem' }}>Please verify your identity. A liveness check requires slight natural movement.</p>
+                  <button onClick={() => {
+                    const checkFace = async () => {
+                      const { data: { session } } = await supabase.auth.getSession();
+                      const { data } = await supabase.from('user_face_descriptors').select('descriptor').eq('user_id', session.user.id).single();
+                      if(data) doFaceLogin(data.descriptor);
+                    };
+                    checkFace();
+                  }} className="auth-btn auth-btn-primary" style={{ background: accentHex, width: '100%' }}>Verify Now</button>
+                </>
               )}
             </div>
           )}
 
-          {/* ===== PIN Code Login ===== */}
-          {screen === "pin" && (
-            <form className="auth-code-form" onSubmit={handlePinSubmit} style={{ animation: "fadeIn 0.3s ease-out" }}>
-              <div className="auth-totp-header">
-                <span style={{ fontSize: "2rem" }}>🔑</span>
-                <p className="auth-code-label" style={{ marginTop: 8 }}>Enter your vault PIN</p>
-              </div>
-              <div className="auth-code-input-row">
-                <input type="password" maxLength={8} value={pin}
-                  onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
-                  className="auth-code-input auth-pin-input" placeholder="• • • •" autoFocus
-                  style={{ "--accent": accentHex, background: isGov ? "#ffffff" : "rgba(0,0,0,0.2)", color: isGov ? "#0f172a" : "#ffffff" }}
-                />
-              </div>
-              <div className="auth-btn-row" style={{ marginTop: "1.5rem" }}>
-                <button type="button" className="auth-btn auth-btn-ghost" onClick={goBack}>Back</button>
-                <button type="submit" className="auth-btn auth-btn-primary"
-                  style={{ background: accentHex, flex: 2 }}>Unlock</button>
-              </div>
-            </form>
-          )}
-
-          {/* ===== Success View ===== */}
-          {screen === "success" && (
-            <div className="auth-success" style={{ animation: "scaleIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)" }}>
-              <div className="auth-success-check">
-                <svg width="52" height="52" viewBox="0 0 52 52">
-                  <circle cx="26" cy="26" r="24" fill="none" stroke="#059669" strokeWidth="2.5" />
-                  <path d="M15 27L23 35L37 20" fill="none" stroke="#059669" strokeWidth="3"
-                    strokeLinecap="round" strokeLinejoin="round" className="auth-check-path" />
-                </svg>
-              </div>
-              <p className="auth-success-text">Welcome to {title}</p>
+          {/* Step 5: Success */}
+          {step === STEPS.SUCCESS && (
+            <div className="auth-success" style={{ textAlign: 'center', padding: '2rem' }}>
+              <span style={{ fontSize: '3rem' }}>✅</span>
+              <p style={{ fontSize: '1.2rem', marginTop: '1rem' }}>Identity Verified</p>
             </div>
           )}
         </div>
-
-        <p className="auth-footer" style={{ color: isGov ? "#475569" : "#64748b" }}>
-          {isGov
-            ? "Government of India · Ministry of Electronics & IT · Secure UIDAI Network"
-            : "Privacy-preserving identity verification · Zero-Knowledge Proofs + Gemini AI"
-          }
-        </p>
       </div>
+      <style>{`
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+      `}</style>
     </div>
   );
 }
