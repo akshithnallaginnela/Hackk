@@ -76,6 +76,9 @@ const initNodemailer = async () => {
       port: parsedPort,
       secure: parsedPort === 465,
       auth: { user, pass },
+      connectionTimeout: 5000, // 5s connection timeout
+      greetingTimeout: 5000,   // 5s greeting timeout
+      socketTimeout: 5000,     // 5s socket timeout
       tls: {
         rejectUnauthorized: false
       }
@@ -99,6 +102,9 @@ const initNodemailer = async () => {
           user: testAccount.user,
           pass: testAccount.pass,
         },
+        connectionTimeout: 5000, // 5s connection timeout
+        greetingTimeout: 5000,   // 5s greeting timeout
+        socketTimeout: 5000,     // 5s socket timeout
       });
       console.log(`\n📨 Ethereal SMTP test account generated:`);
       console.log(`   User: ${testAccount.user}`);
