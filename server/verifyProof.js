@@ -465,14 +465,19 @@ async function sendGovernmentEmail(toEmail, subject, title, bodyHtml, alertBoxHt
     `
   };
 
-  const info = await transporter.sendMail(mailOptions);
-  const testUrl = nodemailer.getTestMessageUrl(info);
-  if (testUrl) {
-    console.log(`📩 [Gov Mail Preview] Sent email to ${toEmail}. Preview at: ${testUrl}`);
-  } else {
-    console.log(`📩 [Gov Mail Sent] Email successfully dispatched to ${toEmail}`);
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    const testUrl = nodemailer.getTestMessageUrl(info);
+    if (testUrl) {
+      console.log(`📩 [Gov Mail Preview] Sent email to ${toEmail}. Preview at: ${testUrl}`);
+    } else {
+      console.log(`📩 [Gov Mail Sent] Email successfully dispatched to ${toEmail}`);
+    }
+    return testUrl;
+  } catch (sendErr) {
+    console.error(`❌ SMTP send error for ${toEmail}:`, sendErr.message);
+    return null;
   }
-  return testUrl;
 }
 
 // Helper: Send High-Fidelity Client Wallet Secure Email
@@ -564,14 +569,19 @@ async function sendClientWalletEmail(toEmail, subject, title, bodyHtml, alertBox
     `
   };
 
-  const info = await transporter.sendMail(mailOptions);
-  const testUrl = nodemailer.getTestMessageUrl(info);
-  if (testUrl) {
-    console.log(`📩 [Wallet Mail Preview] Sent email to ${toEmail}. Preview at: ${testUrl}`);
-  } else {
-    console.log(`📩 [Wallet Mail Sent] Email successfully dispatched to ${toEmail}`);
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    const testUrl = nodemailer.getTestMessageUrl(info);
+    if (testUrl) {
+      console.log(`📩 [Wallet Mail Preview] Sent email to ${toEmail}. Preview at: ${testUrl}`);
+    } else {
+      console.log(`📩 [Wallet Mail Sent] Email successfully dispatched to ${toEmail}`);
+    }
+    return testUrl;
+  } catch (sendErr) {
+    console.error(`❌ SMTP send error for ${toEmail}:`, sendErr.message);
+    return null;
   }
-  return testUrl;
 }
 
 // Biometric Comparison Logic (multimodal Gemini 2.0 Flash / Fallback)
