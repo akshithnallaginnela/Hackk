@@ -16,7 +16,7 @@ import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import dotenv from "dotenv";
 import crypto from "crypto";
-import nodemailer from "nodemailer";
+
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import {
   initDb,
@@ -45,42 +45,7 @@ if (process.env.VITE_GEMINI_API_KEY) {
 }
 
 
-// Initialize Nodemailer Transport
-let transporter;
-const initNodemailer = async () => {
-  const host = process.env.SMTP_HOST;
-  const port = process.env.SMTP_PORT || 587;
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
 
-  if (host && user && pass) {
-    const parsedPort = parseInt(port, 10);
-    transporter = nodemailer.createTransport({
-      host,
-      port: parsedPort,
-      secure: parsedPort === 465,
-      auth: { user, pass },
-      connectionTimeout: 5000,
-      greetingTimeout: 5000,
-      socketTimeout: 5000,
-      tls: {
-        rejectUnauthorized: false
-      }
-    });
-    console.log("📨 Nodemailer custom SMTP transport created");
-    transporter.verify((error) => {
-      if (error) {
-        console.error("❌ Custom SMTP connection verification failed:", error.message);
-      } else {
-        console.log("📨 Custom SMTP Server is successfully verified and ready to send messages!");
-      }
-    });
-  } else {
-    console.error("❌ SMTP Credentials missing in .env! Cannot send emails.");
-    process.exit(1);
-  }
-};
-initNodemailer();
 
 // Initialize PostgreSQL database
 await initDb();
@@ -364,17 +329,8 @@ const generatePin = () => {
 
 // Helper: Send High-Fidelity Government Official Email
 async function sendGovernmentEmail(toEmail, subject, title, bodyHtml, alertBoxHtml = "") {
-  if (!transporter) {
-    console.log(`📨 Mail offline. Preview for ${toEmail}: [${subject}]`);
-    return null;
-  }
-
   const customFrom = process.env.SMTP_GOV_FROM || process.env.SMTP_FROM || process.env.SMTP_USER;
-  const mailOptions = {
-    from: customFrom ? `"Gov Secure Gateway" <${customFrom}>` : '"Gov Secure Gateway" <gateway-auth@meity.gov.in>',
-    to: toEmail,
-    subject: `[SECURE] ${subject}`,
-    html: `
+  const html = `
       <!DOCTYPE html>
       <html>
       <head>
@@ -430,31 +386,46 @@ async function sendGovernmentEmail(toEmail, subject, title, bodyHtml, alertBoxHt
         </div>
       </body>
       </html>
-    `
-  };
+    `;
 
   try {
-    const info = await transporter.sendMail(mailOptions);
-    const testUrl = nodemailer.getTestMessageUrl(info);
-    if (testUrl) {
-      console.log(`📩 [Gov Mail Preview] Sent email to ${toEmail}. Preview at: ${testUrl}`);
-    } else {
-      console.log(`📩 [Gov Mail Sent] Email successfully dispatched to ${toEmail}`);
+    const apiKey = process.env.BREVO_API_KEY;
+    if (!apiKey) {
+      console.error("❌ BREVO_API_KEY missing in .env!");
+      return null;
     }
-    return testUrl;
+    
+    const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: {
+        "accept": "application/json",
+        "api-key": apiKey,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        sender: { email: customFrom || "gateway-auth@meity.gov.in", name: "Gov Secure Gateway" },
+        to: [{ email: toEmail }],
+        subject: `[SECURE] ${subject}`,
+        htmlContent: html
+      })
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`❌ Brevo API send error for ${toEmail}:`, errorText);
+      return null;
+    }
+    
+    console.log(`📩 [Gov Mail Sent via API] Email successfully dispatched to ${toEmail}`);
+    return null;
   } catch (sendErr) {
-    console.error(`❌ SMTP send error for ${toEmail}:`, sendErr.message);
+    console.error(`❌ Brevo API fetch error for ${toEmail}:`, sendErr.message);
     return null;
   }
 }
 
 // Helper: Send High-Fidelity Client Wallet Secure Email
 async function sendClientWalletEmail(toEmail, subject, title, bodyHtml, alertBoxHtml = "") {
-  if (!transporter) {
-    console.log(`📨 Mail offline. Preview for ${toEmail}: [${subject}]`);
-    return null;
-  }
-
   // Extract verification passcode/PIN from alertBoxHtml
   let extractedCode = "SECURE";
   if (alertBoxHtml) {
@@ -465,11 +436,7 @@ async function sendClientWalletEmail(toEmail, subject, title, bodyHtml, alertBox
   }
 
   const customFrom = process.env.SMTP_WALLET_FROM || process.env.SMTP_FROM || process.env.SMTP_USER;
-  const mailOptions = {
-    from: customFrom ? `"ZeroVault Security" <${customFrom}>` : '"ZeroVault Security" <security@zerovault.id>',
-    to: toEmail,
-    subject: `[ZeroVault] ${subject}`,
-    html: `
+  const html = `
       <!DOCTYPE html>
       <html>
       <head>
@@ -534,20 +501,40 @@ async function sendClientWalletEmail(toEmail, subject, title, bodyHtml, alertBox
         </div>
       </body>
       </html>
-    `
-  };
+    `;
 
   try {
-    const info = await transporter.sendMail(mailOptions);
-    const testUrl = nodemailer.getTestMessageUrl(info);
-    if (testUrl) {
-      console.log(`📩 [Wallet Mail Preview] Sent email to ${toEmail}. Preview at: ${testUrl}`);
-    } else {
-      console.log(`📩 [Wallet Mail Sent] Email successfully dispatched to ${toEmail}`);
+    const apiKey = process.env.BREVO_API_KEY;
+    if (!apiKey) {
+      console.error("❌ BREVO_API_KEY missing in .env!");
+      return null;
     }
-    return testUrl;
+    
+    const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: {
+        "accept": "application/json",
+        "api-key": apiKey,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        sender: { email: customFrom || "security@zerovault.id", name: "ZeroVault Security" },
+        to: [{ email: toEmail }],
+        subject: `[ZeroVault] ${subject}`,
+        htmlContent: html
+      })
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`❌ Brevo API send error for ${toEmail}:`, errorText);
+      return null;
+    }
+    
+    console.log(`📩 [Wallet Mail Sent via API] Email successfully dispatched to ${toEmail}`);
+    return null;
   } catch (sendErr) {
-    console.error(`❌ SMTP send error for ${toEmail}:`, sendErr.message);
+    console.error(`❌ Brevo API fetch error for ${toEmail}:`, sendErr.message);
     return null;
   }
 }
