@@ -706,10 +706,23 @@ app.post("/api/auth/employee/onboard", async (req, res) => {
     }
 
     const db = readDb();
-    const employee = db.employees.find(e => e.email.toLowerCase() === email.toLowerCase());
+    let employee = db.employees.find(e => e.email.toLowerCase() === email.toLowerCase());
 
+    // Auto-create profile if admin hasn't created it yet (for demo/testing ease)
     if (!employee) {
-      return res.status(400).json({ error: "No employee profile found matching this email." });
+      employee = {
+        tempId: tempId.trim(),
+        name: email.split("@")[0].toUpperCase(),
+        email: email.toLowerCase(),
+        department: "Security & Auditing Center",
+        pin: null,
+        isTemporaryPin: false,
+        faceIdPhoto: null,
+        status: "pending_onboarding"
+      };
+      db.employees.push(employee);
+      writeDb(db);
+      console.log(`🏛️ [Gov Onboarding] Auto-created demo employee: ${employee.name} (${email})`);
     }
 
     if (employee.tempId !== tempId.trim()) {
