@@ -401,7 +401,7 @@ async function sendGovernmentEmail(toEmail, subject, title, bodyHtml, alertBoxHt
     return null;
   }
 
-  const customFrom = process.env.SMTP_FROM || process.env.SMTP_USER;
+  const customFrom = process.env.SMTP_GOV_FROM || process.env.SMTP_FROM || process.env.SMTP_USER;
   const mailOptions = {
     from: customFrom ? `"Gov Secure Gateway" <${customFrom}>` : '"Gov Secure Gateway" <gateway-auth@meity.gov.in>',
     to: toEmail,
@@ -460,7 +460,7 @@ async function sendClientWalletEmail(toEmail, subject, title, bodyHtml, alertBox
     return null;
   }
 
-  const customFrom = process.env.SMTP_FROM || process.env.SMTP_USER;
+  const customFrom = process.env.SMTP_WALLET_FROM || process.env.SMTP_FROM || process.env.SMTP_USER;
   const mailOptions = {
     from: customFrom ? `"ZeroVault Security" <${customFrom}>` : '"ZeroVault Security" <security@zerovault.id>',
     to: toEmail,
