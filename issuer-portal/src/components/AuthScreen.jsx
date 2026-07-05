@@ -18,6 +18,7 @@ export default function AuthScreen({
   const [emailSent, setEmailSent] = useState(false);
   const [tempId, setTempId] = useState("");
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   // Target email capture if not cached
   const [emailInput, setEmailInput] = useState("");
@@ -244,6 +245,7 @@ export default function AuthScreen({
     e.preventDefault();
     if (!regName || !regEmail || !regDept) { setError("All fields are required."); return; }
     setError("");
+    setIsLoading(true);
 
     try {
       const response = await fetch(`${getBackendUrl()}/api/auth/admin/register-employee`, {
@@ -266,6 +268,8 @@ export default function AuthScreen({
       setScreen("register"); // Move to onboarding screen
     } catch (err) {
       setError(`❌ Registration Failed: ${err.message}`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -276,6 +280,7 @@ export default function AuthScreen({
     if (!tempId.trim()) { setError("Access ID is required."); return; }
     if (!activeEmail || !activeEmail.includes("@")) { setError("Official email is required."); return; }
     setError("");
+    setIsLoading(true);
 
     try {
       const response = await fetch(`${getBackendUrl()}/api/auth/employee/onboard`, {
@@ -290,11 +295,11 @@ export default function AuthScreen({
       }
 
       setEmailSent(true);
-      setScreen("email"); // Redirect to the passcode input page
-      if (data.testPreviewUrl) setDevMailLink(data.testPreviewUrl);
-      if (data.demoCode) setDevMailCode(data.demoCode);
+      setScreen("pin");
     } catch (err) {
       setError(`❌ Onboarding Failed: ${err.message}`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -329,21 +334,6 @@ export default function AuthScreen({
       <div className="auth-container">
         <div className="auth-orb auth-orb-1" style={{ background: `rgba(${accentColor}, 0.1)` }} />
         <div className="auth-orb auth-orb-2" style={{ background: `rgba(${accentColor}, 0.06)` }} />
-
-        {/* Global developer mailbox helper tool */}
-        {(devMailLink || devMailCode) && (
-          <div className="dev-mail-helper" style={{ animation: "slideDown 0.3s ease-out" }}>
-            <div className="dev-mail-header">💻 DEVELOPER TEST CONSOLE</div>
-            <div className="dev-mail-body">
-              {devMailCode && <div>🔑 Dispatched Passcode: <strong>{devMailCode}</strong></div>}
-              {devMailLink && (
-                <div style={{ marginTop: 4 }}>
-                  📬 Secure Ethereal Inbox: <a href={devMailLink} target="_blank" rel="noopener noreferrer">View Captured Mail ↗</a>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
 
         <div className="auth-card" style={{ background: isGov ? "rgba(255, 255, 255, 0.85)" : "rgba(17, 17, 27, 0.65)", color: isGov ? "#0f172a" : "#f8fafc" }}>
           
@@ -461,9 +451,9 @@ export default function AuthScreen({
                 </div>
 
                 <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
-                  <button type="button" className="auth-btn auth-btn-ghost" onClick={goBack} style={{ flex: 1 }}>Back</button>
-                  <button type="submit" className="auth-btn auth-btn-primary" style={{ background: accentHex, flex: 2 }}>
-                    Generate Temp ID
+                  <button type="button" className="auth-btn auth-btn-ghost" onClick={goBack} style={{ flex: 1 }} disabled={isLoading}>Back</button>
+                  <button type="submit" className="auth-btn auth-btn-primary" style={{ background: accentHex, flex: 2 }} disabled={isLoading}>
+                    {isLoading ? "Processing..." : "Generate Temp ID"}
                   </button>
                 </div>
               </form>
@@ -492,7 +482,7 @@ export default function AuthScreen({
               <div className="auth-progress-bar" style={{ width: "80%" }}>
                 <div className="auth-progress-fill" style={{ width: `${scanProgress}%`, background: `linear-gradient(90deg, ${accentHex}, ${secondaryHex})` }} />
               </div>
-              <button type="button" className="auth-btn auth-btn-ghost" onClick={goBack} style={{ marginTop: "0.5rem" }}>Cancel</button>
+              <button type="button" className="auth-btn auth-btn-ghost" onClick={goBack} style={{ marginTop: "0.5rem" }} disabled={isLoading}>Cancel</button>
             </div>
           )}
 
@@ -531,9 +521,9 @@ export default function AuthScreen({
               </div>
 
               <div className="auth-btn-row" style={{ marginTop: "1rem" }}>
-                <button type="button" className="auth-btn auth-btn-ghost" onClick={goBack}>Back</button>
-                <button type="submit" className="auth-btn auth-btn-primary" style={{ background: accentHex, flex: 2 }}>
-                  Request PIN Credentials
+                <button type="button" className="auth-btn auth-btn-ghost" onClick={goBack} disabled={isLoading}>Back</button>
+                <button type="submit" className="auth-btn auth-btn-primary" style={{ background: accentHex, flex: 2 }} disabled={isLoading}>
+                  {isLoading ? "Loading..." : "Request PIN Credentials"}
                 </button>
               </div>
             </form>
@@ -553,9 +543,9 @@ export default function AuthScreen({
                     style={{ "--accent": accentHex, background: isGov ? "#ffffff" : "rgba(0,0,0,0.2)", color: isGov ? "#0f172a" : "#ffffff" }}
                   />
                   <div className="auth-btn-row">
-                    <button type="button" className="auth-btn auth-btn-ghost" onClick={goBack}>Back</button>
+                    <button type="button" className="auth-btn auth-btn-ghost" onClick={goBack} disabled={isLoading}>Back</button>
                     <button type="submit" className="auth-btn auth-btn-primary"
-                      style={{ background: accentHex, flex: 2 }}>Send OTP Code</button>
+                      style={{ background: accentHex, flex: 2 }} disabled={isLoading}>{isLoading ? "Loading..." : "Send OTP Code"}</button>
                   </div>
                 </form>
               ) : (
@@ -573,9 +563,9 @@ export default function AuthScreen({
                     />
                   </div>
                   <div className="auth-btn-row" style={{ marginTop: "1.5rem" }}>
-                    <button type="button" className="auth-btn auth-btn-ghost" onClick={goBack}>Back</button>
+                    <button type="button" className="auth-btn auth-btn-ghost" onClick={goBack} disabled={isLoading}>Back</button>
                     <button type="submit" className="auth-btn auth-btn-primary"
-                      style={{ background: accentHex, flex: 2 }}>Unlock Portal</button>
+                      style={{ background: accentHex, flex: 2 }} disabled={isLoading}>{isLoading ? "Loading..." : "Unlock Portal"}</button>
                   </div>
                 </form>
               )}

@@ -60,9 +60,9 @@ const initNodemailer = async () => {
       port: parsedPort,
       secure: parsedPort === 465,
       auth: { user, pass },
-      connectionTimeout: 5000, // 5s connection timeout
-      greetingTimeout: 5000,   // 5s greeting timeout
-      socketTimeout: 5000,     // 5s socket timeout
+      connectionTimeout: 5000,
+      greetingTimeout: 5000,
+      socketTimeout: 5000,
       tls: {
         rejectUnauthorized: false
       }
@@ -76,27 +76,8 @@ const initNodemailer = async () => {
       }
     });
   } else {
-    try {
-      const testAccount = await nodemailer.createTestAccount();
-      transporter = nodemailer.createTransport({
-        host: "smtp.ethereal.email",
-        port: 587,
-        secure: false,
-        auth: {
-          user: testAccount.user,
-          pass: testAccount.pass,
-        },
-        connectionTimeout: 5000, // 5s connection timeout
-        greetingTimeout: 5000,   // 5s greeting timeout
-        socketTimeout: 5000,     // 5s socket timeout
-      });
-      console.log(`\n📨 Ethereal SMTP test account generated:`);
-      console.log(`   User: ${testAccount.user}`);
-      console.log(`   Pass: ${testAccount.pass}`);
-      console.log(`   Read logs or login at https://ethereal.email/ to preview sent emails!\n`);
-    } catch (err) {
-      console.error("❌ Failed to generate Ethereal SMTP test account:", err);
-    }
+    console.error("❌ SMTP Credentials missing in .env! Cannot send emails.");
+    process.exit(1);
   }
 };
 initNodemailer();
@@ -376,9 +357,9 @@ const generatePasscode = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
-// Helper: Generate a random 4-digit PIN
+// Helper: Generate a random 6-digit PIN
 const generatePin = () => {
-  return Math.floor(1000 + Math.random() * 9000).toString();
+  return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
 // Helper: Send High-Fidelity Government Official Email

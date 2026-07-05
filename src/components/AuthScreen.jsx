@@ -18,6 +18,7 @@ export default function AuthScreen({
   const [emailSent, setEmailSent] = useState(false);
   const [tempId, setTempId] = useState("");
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   // Target email capture if not cached
   const [emailInput, setEmailInput] = useState("");
@@ -154,10 +155,11 @@ export default function AuthScreen({
   // PIN authentication submission
   const handlePinSubmit = async (e) => {
     e.preventDefault();
+    setIsLoading(true);
     setError("");
     const activeEmail = email || emailInput;
-    if (!activeEmail) { setError("Email address is required."); return; }
-    if (pin.length < 4) { setError("PIN must be at least 4 digits."); return; }
+    if (!activeEmail) { setError("Email address is required."); setIsLoading(false); return; }
+    if (pin.length < 4) { setError("PIN must be at least 4 digits."); setIsLoading(false); return; }
 
     try {
       const endpoint = isGov ? "/api/auth/employee/login-pin" : "/api/auth/wallet/login-pin";
@@ -177,14 +179,17 @@ export default function AuthScreen({
       setTimeout(() => onLogin(data.user), 700);
     } catch (err) {
       setError(`❌ Login Failed: ${err.message}`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   // Send login OTP (hits server API)
   const handleEmailSend = async (e) => {
     e.preventDefault();
+    setIsLoading(true);
     const activeEmail = email || emailInput;
-    if (!activeEmail || !activeEmail.includes("@")) { setError("Enter a valid email address."); return; }
+    if (!activeEmail || !activeEmail.includes("@")) { setError("Enter a valid email address."); setIsLoading(false); return; }
     setError("");
     
     try {
@@ -204,14 +209,17 @@ export default function AuthScreen({
       if (data.demoCode) setDevMailCode(data.demoCode);
     } catch (err) {
       setError(`❌ OTP Error: ${err.message}`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   // Verify OTP submission
   const handleEmailVerify = async (e) => {
     e.preventDefault();
+    setIsLoading(true);
     const activeEmail = email || emailInput;
-    if (emailOtp.length !== 6) { setError("Enter 6-digit verification code."); return; }
+    if (emailOtp.length !== 6) { setError("Enter 6-digit verification code."); setIsLoading(false); return; }
     setError("");
 
     try {
@@ -295,20 +303,6 @@ export default function AuthScreen({
         <div className="auth-orb auth-orb-1" style={{ background: `rgba(${accentColor}, 0.1)` }} />
         <div className="auth-orb auth-orb-2" style={{ background: `rgba(${accentColor}, 0.06)` }} />
 
-        {/* Global developer mailbox helper tool */}
-        {(devMailLink || devMailCode) && (
-          <div className="dev-mail-helper" style={{ animation: "slideDown 0.3s ease-out" }}>
-            <div className="dev-mail-header">💻 DEVELOPER TEST CONSOLE</div>
-            <div className="dev-mail-body">
-              {devMailCode && <div>🔑 Dispatched Passcode: <strong>{devMailCode}</strong></div>}
-              {devMailLink && (
-                <div style={{ marginTop: 4 }}>
-                  📬 Secure Ethereal Inbox: <a href={devMailLink} target="_blank" rel="noopener noreferrer">View Captured Mail ↗</a>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
 
         <div className="auth-card" style={{ background: isGov ? "rgba(255, 255, 255, 0.85)" : "rgba(17, 17, 27, 0.65)", color: isGov ? "#0f172a" : "#f8fafc" }}>
           
@@ -475,9 +469,9 @@ export default function AuthScreen({
                     style={{ "--accent": accentHex, background: isGov ? "#ffffff" : "rgba(0,0,0,0.2)", color: isGov ? "#0f172a" : "#ffffff" }}
                   />
                   <div className="auth-btn-row">
-                    <button type="button" className="auth-btn auth-btn-ghost" onClick={goBack}>Back</button>
+                    <button type="button" className="auth-btn auth-btn-ghost" onClick={goBack} disabled={isLoading}>Back</button>
                     <button type="submit" className="auth-btn auth-btn-primary"
-                      style={{ background: accentHex, flex: 2 }}>Send OTP Code</button>
+                      style={{ background: accentHex, flex: 2 }} disabled={isLoading}>{isLoading ? "Processing..." : "Send OTP Code"}</button>
                   </div>
                 </form>
               ) : (
@@ -495,9 +489,9 @@ export default function AuthScreen({
                     />
                   </div>
                   <div className="auth-btn-row" style={{ marginTop: "1.5rem" }}>
-                    <button type="button" className="auth-btn auth-btn-ghost" onClick={goBack}>Back</button>
+                    <button type="button" className="auth-btn auth-btn-ghost" onClick={goBack} disabled={isLoading}>Back</button>
                     <button type="submit" className="auth-btn auth-btn-primary"
-                      style={{ background: accentHex, flex: 2 }}>Unlock Portal</button>
+                      style={{ background: accentHex, flex: 2 }} disabled={isLoading}>{isLoading ? "Verifying..." : "Unlock Portal"}</button>
                   </div>
                 </form>
               )}
