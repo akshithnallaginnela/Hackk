@@ -18,10 +18,11 @@ import crypto from "crypto";
 import nodemailer from "nodemailer";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-dotenv.config();
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// Load environment variables from the root .env file relative to this script
+dotenv.config({ path: join(__dirname, "../.env") });
 
 // Local File Database Configuration
 const dbPath = join(__dirname, "db.json");
@@ -69,13 +70,24 @@ const initNodemailer = async () => {
   const pass = process.env.SMTP_PASS;
 
   if (host && user && pass) {
+    const parsedPort = parseInt(port, 10);
     transporter = nodemailer.createTransport({
       host,
-      port: parseInt(port),
-      secure: port === "465",
-      auth: { user, pass }
+      port: parsedPort,
+      secure: parsedPort === 465,
+      auth: { user, pass },
+      tls: {
+        rejectUnauthorized: false
+      }
     });
-    console.log("📨 Nodemailer configured with custom SMTP");
+    console.log("📨 Nodemailer custom SMTP transport created");
+    transporter.verify((error) => {
+      if (error) {
+        console.error("❌ Custom SMTP connection verification failed:", error.message);
+      } else {
+        console.log("📨 Custom SMTP Server is successfully verified and ready to send messages!");
+      }
+    });
   } else {
     try {
       const testAccount = await nodemailer.createTestAccount();
@@ -383,8 +395,9 @@ async function sendGovernmentEmail(toEmail, subject, title, bodyHtml, alertBoxHt
     return null;
   }
 
+  const customFrom = process.env.SMTP_FROM || process.env.SMTP_USER;
   const mailOptions = {
-    from: '"Gov Secure Gateway" <gateway-auth@meity.gov.in>',
+    from: customFrom ? `"Gov Secure Gateway" <${customFrom}>` : '"Gov Secure Gateway" <gateway-auth@meity.gov.in>',
     to: toEmail,
     subject: `[SECURE] ${subject}`,
     html: `
@@ -441,8 +454,9 @@ async function sendClientWalletEmail(toEmail, subject, title, bodyHtml, alertBox
     return null;
   }
 
+  const customFrom = process.env.SMTP_FROM || process.env.SMTP_USER;
   const mailOptions = {
-    from: '"ZeroVault Security" <security@zerovault.id>',
+    from: customFrom ? `"ZeroVault Security" <${customFrom}>` : '"ZeroVault Security" <security@zerovault.id>',
     to: toEmail,
     subject: `[ZeroVault] ${subject}`,
     html: `
