@@ -405,10 +405,17 @@ export default function AuthScreen({
               <p className="auth-scan-label">
                 {scanProgress < 100 ? `Analyzing facial geometry (${Math.floor(scanProgress)}%)...` : "Processing AI biometrics verification..."}
               </p>
-              <div className="auth-progress-bar" style={{ width: "80%" }}>
+              <div className="auth-progress-bar" style={{ width: "80%", marginBottom: "1rem" }}>
                 <div className="auth-progress-fill" style={{ width: `${scanProgress}%`, background: `linear-gradient(90deg, ${accentHex}, ${secondaryHex})` }} />
               </div>
-              <button type="button" className="auth-btn auth-btn-ghost" onClick={goBack} style={{ marginTop: "0.5rem" }}>Cancel</button>
+              
+              <div style={{ background: isGov ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.05)", padding: "0.75rem", borderRadius: "8px", fontSize: "0.75rem", color: isGov ? "#475569" : "#94a3b8", textAlign: "left", lineHeight: 1.5, width: "100%", maxWidth: "320px" }}>
+                <strong>Enrollment:</strong> Your first scan is converted into a mathematical descriptor number set. We store this descriptor, never your photo. <br />
+                <strong>Login:</strong> Each login takes a fresh scan and compares it mathematically to your descriptor. If it doesn't match closely enough, access is denied. <br />
+                <strong>Tips:</strong> Ensure good lighting • Look directly at camera • Remove sunglasses/masks • Only one face in frame.
+              </div>
+
+              <button type="button" className="auth-btn auth-btn-ghost" onClick={goBack} style={{ marginTop: "1rem" }}>Cancel</button>
             </div>
           )}
 
@@ -463,7 +470,11 @@ export default function AuthScreen({
                   <div className="auth-email-icon-wrap">
                     <span style={{ fontSize: "2.5rem" }}>✉️</span>
                   </div>
-                  <p className="auth-code-label">Dispatches a 6-digit security code to your mail address</p>
+                  <p className="auth-code-label" style={{ marginBottom: "0.25rem" }}>We'll send a quick-expiring code to confirm you control this email.</p>
+                  <p style={{ fontSize: "0.75rem", color: isGov ? "#64748b" : "#94a3b8", marginBottom: "1rem", lineHeight: 1.4, textAlign: "center" }}>
+                    If it isn't arriving, check your spam and confirm the email is typed correctly.
+                    <br />(We verify the code directly — we will never ask you to read it back.)
+                  </p>
                   <input type="email" value={email || emailInput} onChange={(e) => setEmailInput(e.target.value)}
                     className="auth-email-input" placeholder="you@example.com" autoFocus
                     style={{ "--accent": accentHex, background: isGov ? "#ffffff" : "rgba(0,0,0,0.2)", color: isGov ? "#0f172a" : "#ffffff" }}
