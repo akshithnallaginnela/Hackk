@@ -9,8 +9,8 @@ import Settings from "./components/Settings";
 import TutorialWizard from "./components/TutorialWizard";
 
 export default function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(true);
+  const [currentUser, setCurrentUser] = useState({ name: "Developer", email: "dev@zerovault.id" });
   const [activePage, setActivePage] = useState("dashboard"); // dashboard | wallet | verifier | settings
 
   const handleLogin = (user) => {
@@ -24,17 +24,6 @@ export default function App() {
     setCurrentUser(null);
     setActivePage("dashboard");
   };
-
-  const [skipToLogin, setSkipToLogin] = useState(false);
-
-  const hasRegistered = !!localStorage.getItem("zerovault_user_email");
-
-  if (!isLoggedIn) {
-    if (!hasRegistered && !skipToLogin) {
-      return <TutorialWizard onComplete={handleLogin} onSkipToLogin={() => setSkipToLogin(true)} />;
-    }
-    return <AuthScreen onLogin={handleLogin} />;
-  }
 
   return (
     <>
