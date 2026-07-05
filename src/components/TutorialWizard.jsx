@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-export default function TutorialWizard({ onComplete }) {
+export default function TutorialWizard({ onComplete, onSkipToLogin }) {
   const [slide, setSlide] = useState(0);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -133,7 +133,12 @@ export default function TutorialWizard({ onComplete }) {
               </div>
             </div>
 
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "2rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "2rem" }}>
+              {onSkipToLogin && (
+                <button type="button" className="auth-btn auth-btn-ghost" onClick={onSkipToLogin} style={{ fontSize: "0.85rem" }}>
+                  Already registered? Log in →
+                </button>
+              )}
               <button type="button" className="auth-btn auth-btn-primary" onClick={nextSlide} style={{ background: "var(--accent-primary)" }}>
                 Start Tour →
               </button>

@@ -10,7 +10,7 @@ export default function AuthScreen({
   title = "ZeroVault",
   subtitle = "Prove who you are — without exposing what you are.",
 }) {
-  const [screen, setScreen] = useState("methods"); // methods | fingerprint | face | email | pin | register | success
+  const [screen, setScreen] = useState("methods"); // methods | fingerprint | face | email | pin | register | success | new-employee
   const [scanProgress, setScanProgress] = useState(0);
   const [pin, setPin] = useState("");
   const [email, setEmail] = useState(() => localStorage.getItem("zerovault_user_email") || "");
@@ -22,6 +22,11 @@ export default function AuthScreen({
   // Target email capture if not cached
   const [emailInput, setEmailInput] = useState("");
   const [emailLocked, setEmailLocked] = useState(!!localStorage.getItem("zerovault_user_email"));
+  
+  // Registration form state
+  const [regName, setRegName] = useState("");
+  const [regEmail, setRegEmail] = useState("");
+  const [regDept, setRegDept] = useState("UIDAI Management");
   
   // Real camera state
   const [videoStream, setVideoStream] = useState(null);
@@ -43,66 +48,7 @@ export default function AuthScreen({
     return import.meta.env.VITE_BACKEND_URL || "http://localhost:8080";
   };
 
-  // Canvas particle background
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    let w = (canvas.width = window.innerWidth);
-    let h = (canvas.height = window.innerHeight);
 
-    const dots = Array.from({ length: 40 }, () => ({
-      x: Math.random() * w,
-      y: Math.random() * h,
-      r: Math.random() * 2 + 0.5,
-      vx: (Math.random() - 0.5) * 0.35,
-      vy: (Math.random() - 0.5) * 0.35,
-      opacity: Math.random() * 0.35 + 0.1,
-    }));
-
-    const draw = () => {
-      ctx.clearRect(0, 0, w, h);
-      dots.forEach((d) => {
-        d.x += d.vx;
-        d.y += d.vy;
-        if (d.x < 0) d.x = w;
-        if (d.x > w) d.x = 0;
-        if (d.y < 0) d.y = h;
-        if (d.y > h) d.y = 0;
-        ctx.beginPath();
-        ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${accentColor}, ${d.opacity})`;
-        ctx.fill();
-      });
-      for (let i = 0; i < dots.length; i++) {
-        for (let j = i + 1; j < dots.length; j++) {
-          const dx = dots[i].x - dots[j].x;
-          const dy = dots[i].y - dots[j].y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < 110) {
-            ctx.beginPath();
-            ctx.moveTo(dots[i].x, dots[i].y);
-            ctx.lineTo(dots[j].x, dots[j].y);
-            ctx.strokeStyle = `rgba(${accentColor}, ${0.04 * (1 - dist / 110)})`;
-            ctx.lineWidth = 0.5;
-            ctx.stroke();
-          }
-        }
-      }
-      animFrameRef.current = requestAnimationFrame(draw);
-    };
-    draw();
-
-    const handleResize = () => {
-      w = canvas.width = window.innerWidth;
-      h = canvas.height = window.innerHeight;
-    };
-    window.addEventListener("resize", handleResize);
-    return () => {
-      cancelAnimationFrame(animFrameRef.current);
-      window.removeEventListener("resize", handleResize);
-    };
-  }, [accentColor]);
 
   // Clean up media streams when changing screens
   useEffect(() => {
@@ -293,6 +239,36 @@ export default function AuthScreen({
     }
   };
 
+  // New Employee Pre-Registration (Gets Temp ID)
+  const handleNewEmployeeSubmit = async (e) => {
+    e.preventDefault();
+    if (!regName || !regEmail || !regDept) { setError("All fields are required."); return; }
+    setError("");
+
+    try {
+      const response = await fetch(`${getBackendUrl()}/api/auth/admin/register-employee`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: regName, email: regEmail, department: regDept })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to register new employee.");
+      }
+
+      setTempId(data.tempId);
+      setEmailInput(regEmail);
+      setEmail(regEmail);
+      setEmailSent(true);
+      if (data.testPreviewUrl) setDevMailLink(data.testPreviewUrl);
+      if (data.demoCode) setDevMailCode(data.demoCode);
+      setScreen("register"); // Move to onboarding screen
+    } catch (err) {
+      setError(`❌ Registration Failed: ${err.message}`);
+    }
+  };
+
   // First Onboarding (Gov only, Temp ID -> Temp PIN)
   const handleOnboardSubmit = async (e) => {
     e.preventDefault();
@@ -348,7 +324,7 @@ export default function AuthScreen({
            ? "linear-gradient(145deg, #faf9f6 0%, #fff7ed 30%, #f5f4ef 60%, #ecfdf5 100%)"
            : "linear-gradient(145deg, #09090e 0%, #111122 30%, #080812 60%, #0f172a 100%)"
          }}>
-      <canvas ref={canvasRef} className="auth-particles" style={{ position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none" }} />
+
 
       <div className="auth-container">
         <div className="auth-orb auth-orb-1" style={{ background: `rgba(${accentColor}, 0.1)` }} />
@@ -442,12 +418,55 @@ export default function AuthScreen({
               </button>
 
               {isGov && (
-                <div style={{ marginTop: "1rem", textAlign: "center", width: "100%" }}>
-                  <button className="auth-btn-link" onClick={() => setScreen("register")} style={{ color: accentHex, background: "none", border: "none", cursor: "pointer", fontSize: "0.85rem" }}>
-                    🇮🇳 First Onboarding? Click Here
+                <div style={{ marginTop: "1.5rem", display: "flex", flexDirection: "column", gap: "0.75rem", width: "100%" }}>
+                  <button className="auth-btn-link" onClick={() => setScreen("new-employee")} style={{ color: accentHex, background: "rgba(16, 185, 129, 0.1)", border: "1px solid rgba(16, 185, 129, 0.2)", cursor: "pointer", fontSize: "0.85rem", padding: "0.75rem", borderRadius: "8px", fontWeight: "600" }}>
+                    🇮🇳 New Government Employee? Register Here
+                  </button>
+                  <button className="auth-btn-link" onClick={() => setScreen("register")} style={{ color: "#64748b", background: "none", border: "none", cursor: "pointer", fontSize: "0.85rem" }}>
+                    Already have a Temp ID? Complete Onboarding →
                   </button>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ===== New Employee Pre-Registration (Gov Only) ===== */}
+          {screen === "new-employee" && isGov && (
+            <div style={{ animation: "fadeIn 0.3s ease-out" }}>
+              <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
+                <span style={{ fontSize: "2.5rem" }}>🏛️</span>
+                <h3 style={{ margin: "10px 0 5px", color: isGov ? "#0f172a" : "#fff", fontSize: "1.2rem" }}>Official Registration</h3>
+                <p style={{ margin: 0, color: isGov ? "#64748b" : "#94a3b8", fontSize: "0.9rem" }}>Initialize your UIDAI Security Gateway profile.</p>
+              </div>
+
+              {error && <div className="auth-error-box">{error}</div>}
+
+              <form onSubmit={handleNewEmployeeSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                <div className="auth-input-group">
+                  <label className="auth-input-label">Officer Name</label>
+                  <input type="text" value={regName} onChange={e => setRegName(e.target.value)} className="auth-text-input" placeholder="e.g. Ramesh Kumar" required autoFocus />
+                </div>
+                <div className="auth-input-group">
+                  <label className="auth-input-label">Official Email</label>
+                  <input type="email" value={regEmail} onChange={e => setRegEmail(e.target.value)} className="auth-text-input" placeholder="ramesh.kumar@gov.in" required />
+                </div>
+                <div className="auth-input-group">
+                  <label className="auth-input-label">Department</label>
+                  <select value={regDept} onChange={e => setRegDept(e.target.value)} className="auth-text-input" style={{ background: isGov ? "#fff" : "rgba(255,255,255,0.05)" }} required>
+                    <option value="UIDAI Management">UIDAI Management</option>
+                    <option value="Security & Auditing">Security & Auditing</option>
+                    <option value="Regional Office">Regional Office</option>
+                    <option value="IT Infrastructure">IT Infrastructure</option>
+                  </select>
+                </div>
+
+                <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
+                  <button type="button" className="auth-btn auth-btn-ghost" onClick={goBack} style={{ flex: 1 }}>Back</button>
+                  <button type="submit" className="auth-btn auth-btn-primary" style={{ background: accentHex, flex: 2 }}>
+                    Generate Temp ID
+                  </button>
+                </div>
+              </form>
             </div>
           )}
 

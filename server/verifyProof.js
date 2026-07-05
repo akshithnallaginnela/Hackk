@@ -4,19 +4,25 @@
  * - Asymmetric Cryptographic Credential Issuance (ECDSA secp256k1)
  * - Zero-Knowledge Proof verification (real or simulation)
  * - Live WebSocket communication for instant proof verification matching
+ * - PostgreSQL (Neon) production database
  */
 import express from "express";
 import cors from "cors";
 import http from "http";
 import { WebSocketServer } from "ws";
 import * as snarkjs from "snarkjs";
-import { readFileSync, writeFileSync, existsSync } from "fs";
+import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import dotenv from "dotenv";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import {
+  initDb,
+  findEmployeeByEmail, createEmployee, updateEmployee,
+  findWalletByEmail, createWallet, updateWallet, upsertWallet
+} from "./db.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -24,28 +30,6 @@ const __dirname = dirname(__filename);
 // Load environment variables from the root .env file relative to this script
 dotenv.config({ path: join(__dirname, "../.env") });
 
-// Local File Database Configuration
-const dbPath = join(__dirname, "db.json");
-
-function readDb() {
-  try {
-    if (!existsSync(dbPath)) {
-      writeFileSync(dbPath, JSON.stringify({ employees: [], wallets: [] }, null, 2));
-    }
-    return JSON.parse(readFileSync(dbPath, "utf8"));
-  } catch (err) {
-    console.error("Error reading database:", err);
-    return { employees: [], wallets: [] };
-  }
-}
-
-function writeDb(data) {
-  try {
-    writeFileSync(dbPath, JSON.stringify(data, null, 2), "utf8");
-  } catch (err) {
-    console.error("Error writing database:", err);
-  }
-}
 
 // In-memory tables for temporary OTP validation codes
 const pendingRegistrations = new Map(); // email -> { tempId, otp, timestamp }
@@ -116,6 +100,9 @@ const initNodemailer = async () => {
   }
 };
 initNodemailer();
+
+// Initialize PostgreSQL database
+await initDb();
 
 const app = express();
 app.use(cors());
@@ -641,29 +628,15 @@ app.post("/api/auth/admin/register-employee", async (req, res) => {
       return res.status(400).json({ error: "Name, Email, and Department are required." });
     }
 
-    const db = readDb();
-    
     // Check if employee email already exists
-    const existing = db.employees.find(e => e.email.toLowerCase() === email.toLowerCase());
+    const existing = await findEmployeeByEmail(email);
     if (existing) {
       return res.status(400).json({ error: "An employee with this email is already registered." });
     }
 
     const tempId = `GOV-EMP-${Math.floor(1000 + Math.random() * 9000)}`;
 
-    const newEmployee = {
-      tempId,
-      name,
-      email: email.toLowerCase(),
-      department,
-      pin: null,
-      isTemporaryPin: false,
-      faceIdPhoto: null,
-      status: "pending_onboarding"
-    };
-
-    db.employees.push(newEmployee);
-    writeDb(db);
+    await createEmployee({ tempId, name, email, department });
 
     console.log(`🏛️ [Gov Admin] Pre-registered ${name} (${email}). Generated Temp ID: ${tempId}`);
 
@@ -705,24 +678,10 @@ app.post("/api/auth/employee/onboard", async (req, res) => {
       return res.status(400).json({ error: "Temporary ID and Email address are required." });
     }
 
-    const db = readDb();
-    let employee = db.employees.find(e => e.email.toLowerCase() === email.toLowerCase());
+    let employee = await findEmployeeByEmail(email);
 
-    // Auto-create profile if admin hasn't created it yet (for demo/testing ease)
     if (!employee) {
-      employee = {
-        tempId: tempId.trim(),
-        name: email.split("@")[0].toUpperCase(),
-        email: email.toLowerCase(),
-        department: "Security & Auditing Center",
-        pin: null,
-        isTemporaryPin: false,
-        faceIdPhoto: null,
-        status: "pending_onboarding"
-      };
-      db.employees.push(employee);
-      writeDb(db);
-      console.log(`🏛️ [Gov Onboarding] Auto-created demo employee: ${employee.name} (${email})`);
+      return res.status(400).json({ error: "No employee profile found. Please register first via the Issuer Portal." });
     }
 
     if (employee.tempId !== tempId.trim()) {
@@ -730,10 +689,8 @@ app.post("/api/auth/employee/onboard", async (req, res) => {
     }
 
     const tempPin = generatePin();
+    await updateEmployee(email, { pin: tempPin, isTemporaryPin: true, status: "onboarded" });
     employee.pin = tempPin;
-    employee.isTemporaryPin = true;
-    employee.status = "onboarded";
-    writeDb(db);
 
     console.log(`🔑 [Gov Onboarding] Generated Temp PIN for ${email}: ${tempPin}`);
 
@@ -770,32 +727,14 @@ app.post("/api/register-temp-id", async (req, res) => {
   // Legacy onboarding endpoint, maps to onboarding
   try {
     const { tempId, email } = req.body;
-    const db = readDb();
-    
-    // Auto-create profile if admin hasn't created it yet (for test ease)
-    let employee = db.employees.find(e => e.email.toLowerCase() === email.toLowerCase());
+    let employee = await findEmployeeByEmail(email);
     if (!employee) {
-      employee = {
-        tempId: tempId,
-        name: email.split("@")[0].toUpperCase(),
-        email: email.toLowerCase(),
-        department: "Security & Auditing Center",
-        pin: null,
-        isTemporaryPin: false,
-        faceIdPhoto: null,
-        status: "pending_onboarding"
-      };
-      db.employees.push(employee);
-      writeDb(db);
+      employee = await createEmployee({ tempId, name: email.split("@")[0].toUpperCase(), email, department: "Security & Auditing Center" });
     }
     
     // Call the same onboarding logic
     const tempPin = generatePin();
-    employee.pin = tempPin;
-    employee.tempId = tempId;
-    employee.isTemporaryPin = true;
-    employee.status = "onboarded";
-    writeDb(db);
+    await updateEmployee(email, { pin: tempPin, tempId, isTemporaryPin: true, status: "onboarded" });
 
     console.log(`🔑 [Legacy Onboarding] Generated Temp PIN for ${email}: ${tempPin}`);
 
@@ -824,11 +763,10 @@ app.post("/api/register-temp-id", async (req, res) => {
   }
 });
 
-app.post("/api/verify-gov-auth", (req, res) => {
+app.post("/api/verify-gov-auth", async (req, res) => {
   // Legacy login PIN endpoint, maps to login-pin
   const { email, otp } = req.body; // otp is the temporary PIN entered
-  const db = readDb();
-  const employee = db.employees.find(e => e.email.toLowerCase() === email.toLowerCase());
+  const employee = await findEmployeeByEmail(email);
 
   if (!employee || employee.pin !== otp.trim()) {
     return res.status(400).json({ error: "Invalid login passcode." });
@@ -845,8 +783,7 @@ app.post("/api/auth/employee/login-pin", async (req, res) => {
       return res.status(400).json({ error: "Email and PIN are required." });
     }
 
-    const db = readDb();
-    const employee = db.employees.find(e => e.email.toLowerCase() === email.toLowerCase());
+    const employee = await findEmployeeByEmail(email);
 
     if (!employee) {
       return res.status(400).json({ error: "Access Denied: No employee profile registered." });
@@ -881,8 +818,7 @@ app.post("/api/auth/employee/login-face", async (req, res) => {
       return res.status(400).json({ error: "Email and captured camera frame are required." });
     }
 
-    const db = readDb();
-    const employee = db.employees.find(e => e.email.toLowerCase() === email.toLowerCase());
+    const employee = await findEmployeeByEmail(email);
 
     if (!employee) {
       return res.status(400).json({ error: "No employee profile registered for this email." });
@@ -925,24 +861,21 @@ app.post("/api/auth/employee/save-settings", async (req, res) => {
       return res.status(400).json({ error: "Email address is required." });
     }
 
-    const db = readDb();
-    const employee = db.employees.find(e => e.email.toLowerCase() === email.toLowerCase());
+    const employee = await findEmployeeByEmail(email);
 
     if (!employee) {
       return res.status(400).json({ error: "Employee profile not found." });
     }
 
+    const updates = { status: "active" };
     if (pin) {
-      employee.pin = pin.trim();
-      employee.isTemporaryPin = false;
+      updates.pin = pin.trim();
+      updates.isTemporaryPin = false;
     }
-
     if (faceIdPhoto) {
-      employee.faceIdPhoto = faceIdPhoto;
+      updates.faceIdPhoto = faceIdPhoto;
     }
-
-    employee.status = "active";
-    writeDb(db);
+    await updateEmployee(email, updates);
 
     console.log(`⚙️ Saved portal settings for employee ${email}`);
     res.json({ success: true });
@@ -960,11 +893,9 @@ app.post("/api/auth/send-login-otp", async (req, res) => {
       return res.status(400).json({ error: "Email address is required." });
     }
 
-    const db = readDb();
-    
     // If it's a government request, check employee profile
     if (portalType === "gov") {
-      const employee = db.employees.find(e => e.email.toLowerCase() === email.toLowerCase());
+      const employee = await findEmployeeByEmail(email);
       if (!employee) {
         return res.status(400).json({ error: "No employee record found for this email address." });
       }
@@ -1042,10 +973,9 @@ app.post("/api/auth/verify-login-otp", async (req, res) => {
     activeOtps.delete(email.toLowerCase());
     
     // Look up user profile
-    const db = readDb();
     let user = null;
     if (portalType === "gov") {
-      const emp = db.employees.find(e => e.email.toLowerCase() === email.toLowerCase());
+      const emp = await findEmployeeByEmail(email);
       if (emp) {
         user = {
           name: emp.name,
@@ -1057,7 +987,7 @@ app.post("/api/auth/verify-login-otp", async (req, res) => {
         };
       }
     } else {
-      const wal = db.wallets.find(w => w.email.toLowerCase() === email.toLowerCase());
+      const wal = await findWalletByEmail(email);
       if (wal) {
         user = {
           name: wal.name,
@@ -1137,30 +1067,8 @@ app.post("/api/auth/wallet/register", async (req, res) => {
       return res.status(400).json({ error: "Name, Email, and Mobile number are required." });
     }
 
-    const db = readDb();
-    
-    // Find or initialize wallet
-    let wallet = db.wallets.find(w => w.email.toLowerCase() === email.toLowerCase());
     const regPin = generatePin();
-
-    if (wallet) {
-      wallet.name = name;
-      wallet.mobile = mobile;
-      wallet.pin = regPin;
-    } else {
-      wallet = {
-        name,
-        email: email.toLowerCase(),
-        mobile,
-        pin: regPin,
-        faceIdPhoto: null,
-        alternativeEmail: "",
-        alternativeMobile: ""
-      };
-      db.wallets.push(wallet);
-    }
-    
-    writeDb(db);
+    const wallet = await upsertWallet({ name, email, mobile, pin: regPin });
 
     console.log(`🏛️ [Wallet Register] User ${name} (${email}). Initial PIN: ${regPin}`);
 
@@ -1200,8 +1108,7 @@ app.post("/api/auth/wallet/login-pin", async (req, res) => {
       return res.status(400).json({ error: "Email and PIN are required." });
     }
 
-    const db = readDb();
-    const wallet = db.wallets.find(w => w.email.toLowerCase() === email.toLowerCase());
+    const wallet = await findWalletByEmail(email);
 
     if (!wallet) {
       return res.status(400).json({ error: "No wallet profile registered for this email." });
@@ -1236,8 +1143,7 @@ app.post("/api/auth/wallet/login-face", async (req, res) => {
       return res.status(400).json({ error: "Email and camera capture are required." });
     }
 
-    const db = readDb();
-    const wallet = db.wallets.find(w => w.email.toLowerCase() === email.toLowerCase());
+    const wallet = await findWalletByEmail(email);
 
     if (!wallet) {
       return res.status(400).json({ error: "No wallet profile registered." });
@@ -1281,27 +1187,18 @@ app.post("/api/auth/wallet/save-settings", async (req, res) => {
       return res.status(400).json({ error: "Email is required." });
     }
 
-    const db = readDb();
-    const wallet = db.wallets.find(w => w.email.toLowerCase() === email.toLowerCase());
+    const wallet = await findWalletByEmail(email);
 
     if (!wallet) {
       return res.status(400).json({ error: "Wallet profile not found." });
     }
 
-    if (pin) {
-      wallet.pin = pin.trim();
-    }
-    if (faceIdPhoto) {
-      wallet.faceIdPhoto = faceIdPhoto;
-    }
-    if (alternativeEmail !== undefined) {
-      wallet.alternativeEmail = alternativeEmail;
-    }
-    if (alternativeMobile !== undefined) {
-      wallet.alternativeMobile = alternativeMobile;
-    }
-
-    writeDb(db);
+    const updates = {};
+    if (pin) updates.pin = pin.trim();
+    if (faceIdPhoto) updates.faceIdPhoto = faceIdPhoto;
+    if (alternativeEmail !== undefined) updates.alternativeEmail = alternativeEmail;
+    if (alternativeMobile !== undefined) updates.alternativeMobile = alternativeMobile;
+    await updateWallet(email, updates);
     console.log(`⚙️ Saved settings for wallet user ${email}`);
     res.json({ success: true });
   } catch (err) {

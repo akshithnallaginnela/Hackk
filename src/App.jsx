@@ -25,11 +25,13 @@ export default function App() {
     setActivePage("dashboard");
   };
 
+  const [skipToLogin, setSkipToLogin] = useState(false);
+
   const hasRegistered = !!localStorage.getItem("zerovault_user_email");
 
   if (!isLoggedIn) {
-    if (!hasRegistered) {
-      return <TutorialWizard onComplete={handleLogin} />;
+    if (!hasRegistered && !skipToLogin) {
+      return <TutorialWizard onComplete={handleLogin} onSkipToLogin={() => setSkipToLogin(true)} />;
     }
     return <AuthScreen onLogin={handleLogin} />;
   }

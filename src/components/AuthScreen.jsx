@@ -43,66 +43,7 @@ export default function AuthScreen({
     return import.meta.env.VITE_BACKEND_URL || "http://localhost:8080";
   };
 
-  // Canvas particle background
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    let w = (canvas.width = window.innerWidth);
-    let h = (canvas.height = window.innerHeight);
 
-    const dots = Array.from({ length: 40 }, () => ({
-      x: Math.random() * w,
-      y: Math.random() * h,
-      r: Math.random() * 2 + 0.5,
-      vx: (Math.random() - 0.5) * 0.35,
-      vy: (Math.random() - 0.5) * 0.35,
-      opacity: Math.random() * 0.35 + 0.1,
-    }));
-
-    const draw = () => {
-      ctx.clearRect(0, 0, w, h);
-      dots.forEach((d) => {
-        d.x += d.vx;
-        d.y += d.vy;
-        if (d.x < 0) d.x = w;
-        if (d.x > w) d.x = 0;
-        if (d.y < 0) d.y = h;
-        if (d.y > h) d.y = 0;
-        ctx.beginPath();
-        ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${accentColor}, ${d.opacity})`;
-        ctx.fill();
-      });
-      for (let i = 0; i < dots.length; i++) {
-        for (let j = i + 1; j < dots.length; j++) {
-          const dx = dots[i].x - dots[j].x;
-          const dy = dots[i].y - dots[j].y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < 110) {
-            ctx.beginPath();
-            ctx.moveTo(dots[i].x, dots[i].y);
-            ctx.lineTo(dots[j].x, dots[j].y);
-            ctx.strokeStyle = `rgba(${accentColor}, ${0.04 * (1 - dist / 110)})`;
-            ctx.lineWidth = 0.5;
-            ctx.stroke();
-          }
-        }
-      }
-      animFrameRef.current = requestAnimationFrame(draw);
-    };
-    draw();
-
-    const handleResize = () => {
-      w = canvas.width = window.innerWidth;
-      h = canvas.height = window.innerHeight;
-    };
-    window.addEventListener("resize", handleResize);
-    return () => {
-      cancelAnimationFrame(animFrameRef.current);
-      window.removeEventListener("resize", handleResize);
-    };
-  }, [accentColor]);
 
   // Clean up media streams when changing screens
   useEffect(() => {
@@ -348,7 +289,7 @@ export default function AuthScreen({
            ? "linear-gradient(145deg, #faf9f6 0%, #fff7ed 30%, #f5f4ef 60%, #ecfdf5 100%)"
            : "linear-gradient(145deg, #09090e 0%, #111122 30%, #080812 60%, #0f172a 100%)"
          }}>
-      <canvas ref={canvasRef} className="auth-particles" style={{ position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none" }} />
+
 
       <div className="auth-container">
         <div className="auth-orb auth-orb-1" style={{ background: `rgba(${accentColor}, 0.1)` }} />
