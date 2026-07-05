@@ -482,6 +482,15 @@ async function sendClientWalletEmail(toEmail, subject, title, bodyHtml, alertBox
     return null;
   }
 
+  // Extract verification passcode/PIN from alertBoxHtml
+  let extractedCode = "SECURE";
+  if (alertBoxHtml) {
+    const codeMatch = alertBoxHtml.match(/<h1[^>]*>([^<]+)<\/h1>/);
+    if (codeMatch && codeMatch[1]) {
+      extractedCode = codeMatch[1].trim();
+    }
+  }
+
   const customFrom = process.env.SMTP_WALLET_FROM || process.env.SMTP_FROM || process.env.SMTP_USER;
   const mailOptions = {
     from: customFrom ? `"ZeroVault Security" <${customFrom}>` : '"ZeroVault Security" <security@zerovault.id>',
@@ -494,47 +503,60 @@ async function sendClientWalletEmail(toEmail, subject, title, bodyHtml, alertBox
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
-          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #0b0f19; margin: 0; padding: 0; }
-          .email-container { max-width: 600px; margin: 40px auto; background-color: #111827; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.3); border: 1px solid #1f2937; }
-          .top-glow { height: 6px; background: linear-gradient(90deg, #6366f1 0%, #a855f7 50%, #ec4899 100%); }
-          .header { background-color: #090d16; padding: 36px 24px; text-align: center; }
-          .header-icon { font-size: 32px; margin-bottom: 12px; display: inline-block; }
-          .header-title { font-size: 20px; font-weight: 700; color: #ffffff; margin: 0; letter-spacing: 0.5px; text-transform: uppercase; }
-          .header-subtitle { font-size: 11px; color: #a5b4fc; margin-top: 6px; letter-spacing: 1.5px; text-transform: uppercase; font-weight: 600; }
-          .content { padding: 40px 32px; color: #d1d5db; line-height: 1.7; }
-          .section-title { font-size: 16px; font-weight: 600; color: #ffffff; margin-top: 0; border-bottom: 1px solid #1f2937; padding-bottom: 12px; margin-bottom: 24px; }
-          .privacy-box { background-color: #1e1b4b; border-left: 4px solid #6366f1; border-radius: 8px; padding: 20px; margin-top: 32px; }
-          .privacy-title { font-size: 10px; font-weight: 700; color: #a5b4fc; text-transform: uppercase; letter-spacing: 1.5px; margin: 0 0 6px; }
-          .privacy-text { font-size: 11px; color: #c7d2fe; margin: 0; line-height: 1.6; }
-          .footer { background-color: #090d16; padding: 28px; text-align: center; font-size: 11px; color: #6b7280; border-top: 1px solid #1f2937; }
-          .footer-text { margin: 4px 0; }
-          .footer-id { color: #4b5563; font-size: 10px; font-family: monospace; text-transform: uppercase; margin-top: 12px; display: block; }
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f3f4f6; margin: 0; padding: 0; }
+          .email-container { max-width: 500px; margin: 40px auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.05); border: 1px solid #e5e7eb; }
+          .header { padding: 40px 24px 24px 24px; text-align: center; }
+          .logo { font-size: 24px; font-weight: 800; color: #1e1b4b; letter-spacing: -0.5px; margin: 0 0 28px 0; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+          .logo-symbol { font-size: 22px; margin-right: 6px; }
+          .subtitle { font-size: 11px; font-weight: 700; color: #ff5a1f; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 12px; }
+          .headline { font-size: 28px; font-weight: 800; color: #111827; margin: 0 0 16px 0; line-height: 1.25; }
+          .headline span { color: #ff5a1f; font-style: italic; font-weight: 700; }
+          .body-text { font-size: 14px; color: #4b5563; line-height: 1.6; max-width: 400px; margin: 0 auto 28px auto; text-align: left; }
+          .code-box { background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 24px; text-align: center; max-width: 360px; margin: 0 auto 28px auto; }
+          .code-text { font-size: 32px; font-weight: 700; color: #4b5563; letter-spacing: 4px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; }
+          .button-container { text-align: center; margin-bottom: 28px; }
+          .action-button { display: inline-block; background-color: #ff5a1f; color: #ffffff !important; font-weight: 700; font-size: 13px; text-decoration: none; padding: 14px 44px; border-radius: 8px; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 4px 12px rgba(255, 90, 31, 0.25); }
+          .info-note { font-size: 13px; color: #6b7280; text-align: center; margin-bottom: 40px; }
+          .footer { background-color: #000000; padding: 40px 32px; text-align: center; color: #9ca3af; }
+          .footer-logo { font-size: 18px; font-weight: 700; color: #ffffff; letter-spacing: -0.5px; display: inline-block; margin-bottom: 24px; }
+          .footer-links { font-size: 11px; margin-bottom: 16px; }
+          .footer-links a { color: #9ca3af; text-decoration: none; margin: 0 8px; }
+          .footer-address { font-size: 10px; color: #4b5563; line-height: 1.5; }
         </style>
       </head>
       <body>
         <div class="email-container">
-          <div class="top-glow"></div>
           <div class="header">
-            <div class="header-icon">🔐</div>
-            <h2 class="header-title">ZEROVAULT SECURITY</h2>
-            <div class="header-subtitle">Self-Sovereign Cryptographic Lock</div>
-          </div>
-          <div class="content">
-            <h3 class="section-title">${title}</h3>
-            <div style="font-size: 14px; color: #d1d5db; margin-bottom: 20px;">
+            <div class="logo"><span class="logo-symbol">🔐</span>ZeroVault</div>
+            <div class="subtitle">Vault Security Verification</div>
+            <h2 class="headline">Secure Your <span>Identity Vault</span></h2>
+            <div class="body-text">
               ${bodyHtml}
             </div>
-            ${alertBoxHtml}
-            <div class="privacy-box">
-              <p class="privacy-title">Privacy Protection Statement</p>
-              <p class="privacy-text">
-                ZeroVault utilizes advanced client-side Zero-Knowledge Proofs. Your private credentials, biometrics, and security keys never leave your device. The server only performs requested cryptographic comparisons and secure mail handshakes.
-              </p>
+            
+            <div class="code-box">
+              <div class="code-text">${extractedCode}</div>
+            </div>
+
+            <div class="button-container">
+              <span class="action-button">VERIFY & CONTINUE</span>
+            </div>
+
+            <div class="info-note">
+              Didn't request this? No worries — simply ignore this message.
             </div>
           </div>
+          
           <div class="footer">
-            <p class="footer-text">ZeroVault Inc. · Automated Security Services Network</p>
-            <span class="footer-id">System Reference ID: ZV-SEC-${crypto.randomBytes(6).toString("hex").toUpperCase()}</span>
+            <div class="footer-logo">🔐 ZeroVault</div>
+            <div class="footer-links">
+              <a href="#">Security Center</a> | <a href="#">About Us</a> | <a href="#">Help Center</a>
+            </div>
+            <div class="footer-address">
+              ZeroVault Cryptographic Systems Inc.<br>
+              1209 Mountain Road PL NE Ste R, Albuquerque, NM 87110<br>
+              System Reference ID: ZV-SEC-${crypto.randomBytes(6).toString("hex").toUpperCase()}
+            </div>
           </div>
         </div>
       </body>
