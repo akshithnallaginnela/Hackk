@@ -5,22 +5,32 @@ import ProverWallet from "./components/ProverWallet";
 import VerifierPortal from "./components/VerifierPortal";
 import GeminiAssistant from "./components/GeminiAssistant";
 import ProofHistory from "./components/ProofHistory";
+import Settings from "./components/Settings";
+import TutorialWizard from "./components/TutorialWizard";
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [activePage, setActivePage] = useState("dashboard"); // dashboard | wallet | verifier
+  const [currentUser, setCurrentUser] = useState(null);
+  const [activePage, setActivePage] = useState("dashboard"); // dashboard | wallet | verifier | settings
 
-  const handleLogin = () => {
+  const handleLogin = (user) => {
+    setCurrentUser(user);
     setIsLoggedIn(true);
     setActivePage("dashboard");
   };
 
   const handleLogout = () => {
     setIsLoggedIn(false);
+    setCurrentUser(null);
     setActivePage("dashboard");
   };
 
+  const hasRegistered = !!localStorage.getItem("zerovault_user_email");
+
   if (!isLoggedIn) {
+    if (!hasRegistered) {
+      return <TutorialWizard onComplete={handleLogin} />;
+    }
     return <AuthScreen onLogin={handleLogin} />;
   }
 
@@ -61,6 +71,12 @@ export default function App() {
               onClick={() => setActivePage("verifier")}
             >
               🍻 Store Terminal
+            </button>
+            <button
+              className={`global-nav-link ${activePage === "settings" ? "active" : ""}`}
+              onClick={() => setActivePage("settings")}
+            >
+              ⚙️ Settings
             </button>
             <button
               className="global-nav-link logout-btn"
@@ -114,6 +130,10 @@ export default function App() {
               </header>
               <VerifierPortal />
             </>
+          )}
+
+          {activePage === "settings" && (
+            <Settings user={currentUser} onUpdateUser={setCurrentUser} />
           )}
         </main>
 

@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import AuthScreen from "./components/AuthScreen";
 import GovDashboard from "./components/GovDashboard";
+import Settings from "./components/Settings";
+import AdminConsole from "./components/AdminConsole";
 
 // Dynamically resolve backend URLs (falls back to localhost for development)
 const getBackendUrls = () => {
@@ -16,7 +18,8 @@ const BACKEND_URLS = getBackendUrls();
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [activePage, setActivePage] = useState("dashboard"); // dashboard | terminal
+  const [currentUser, setCurrentUser] = useState(null);
+  const [activePage, setActivePage] = useState("dashboard"); // dashboard | terminal | settings | admin
 
   // Issuance form states
   const [name, setName] = useState("");
@@ -180,13 +183,15 @@ export default function App() {
     return `XXXX XXXX ${num.slice(-4)}`;
   };
 
-  const handleLoginSuccess = () => {
+  const handleLoginSuccess = (user) => {
+    setCurrentUser(user);
     setIsLoggedIn(true);
     setActivePage("dashboard");
   };
 
   const handleLogout = () => {
     setIsLoggedIn(false);
+    setCurrentUser(null);
     setActivePage("dashboard");
     disconnectSession();
   };
@@ -206,7 +211,7 @@ export default function App() {
     <>
       <div className="app-background"></div>
 
-      <div className="app-content" style={{ maxWidth: activePage === "dashboard" ? "800px" : "600px" }}>
+      <div className="app-content" style={{ maxWidth: (activePage === "dashboard" || activePage === "admin") ? "800px" : "600px" }}>
         
         {/* Navigation Bar */}
         <nav className="gov-nav">
@@ -221,6 +226,12 @@ export default function App() {
               📊 Analytics
             </button>
             <button
+              className={`gov-nav-link ${activePage === "admin" ? "active" : ""}`}
+              onClick={() => setActivePage("admin")}
+            >
+              💼 Registry Console
+            </button>
+            <button
               className={`gov-nav-link ${activePage === "terminal" ? "active" : ""}`}
               onClick={() => {
                 setActivePage("terminal");
@@ -230,15 +241,31 @@ export default function App() {
             >
               ✍️ Issue Terminal
             </button>
+            <button
+              className={`gov-nav-link ${activePage === "settings" ? "active" : ""}`}
+              onClick={() => setActivePage("settings")}
+            >
+              ⚙️ Settings
+            </button>
             <button className="gov-nav-link logout-btn" onClick={handleLogout}>
               🔒 Lock
             </button>
           </div>
         </nav>
 
-        {activePage === "dashboard" ? (
+        {activePage === "dashboard" && (
           <GovDashboard wsStatus={wsStatus} onNavigate={setActivePage} />
-        ) : (
+        )}
+
+        {activePage === "admin" && (
+          <AdminConsole />
+        )}
+
+        {activePage === "settings" && (
+          <Settings user={currentUser} onUpdateUser={setCurrentUser} />
+        )}
+
+        {activePage === "terminal" && (
           <div className="glass-card" style={{ animation: "fadeIn 0.3s ease-out" }}>
             <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
               <div>
@@ -268,137 +295,148 @@ export default function App() {
                   Sync Session ID: <strong style={{ color: "var(--accent-emerald)", fontSize: "1.1rem", fontFamily: "var(--font-mono)", padding: "2px 8px", background: "rgba(16, 185, 129, 0.1)", borderRadius: 4, marginLeft: 4 }}>{sessionCode}</strong>
                 </span>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  {wsStatus === "connected" && <span style={{ color: "var(--accent-emerald)", fontWeight: 700 }}>🟢 Synced</span>}
-                  {wsStatus === "listening" && <span style={{ color: "var(--text-secondary)" }}>⏳ Waiting...</span>}
-                  {wsStatus === "connecting" && <span style={{ color: "var(--text-secondary)" }}>⚡ Connecting...</span>}
-                  {wsStatus === "disconnected" && (
-                    <button 
-                      onClick={connectToWalletSession} 
-                      className="btn btn-primary" 
-                      style={{ padding: "4px 10px", fontSize: "0.7rem", width: "auto" }}
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(sessionCode);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    }}
+                    className="btn"
+                    style={{ padding: "4px 10px", fontSize: "0.75rem", background: "var(--bg-primary)", border: "1px solid var(--border-default)" }}
+                  >
+                    {copied ? "Copied!" : "Copy Code"}
+                  </button>
+                  {wsStatus === "disconnected" ? (
+                    <button
+                      onClick={connectToWalletSession}
+                      className="btn btn-primary"
+                      style={{ padding: "4px 10px", fontSize: "0.75rem", background: "var(--accent-primary)" }}
                     >
-                      Reconnect
+                      Connect Sync
+                    </button>
+                  ) : (
+                    <button
+                      onClick={disconnectSession}
+                      className="btn logout-btn"
+                      style={{ padding: "4px 10px", fontSize: "0.75rem" }}
+                    >
+                      Disconnect
                     </button>
                   )}
                 </div>
               </div>
-              {error && <div style={{ color: "red", fontSize: "0.72rem", marginTop: 6 }}>⚠️ {error}</div>}
             </div>
 
-            {!issuedCredential ? (
-              <form onSubmit={handleIssue} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                {error && (
-                  <div className="status-box error">
-                    <span className="status-icon">❌</span>
-                    <div>{error}</div>
-                  </div>
-                )}
+            {error && (
+              <div className="alert alert-error" style={{ marginBottom: "1.5rem" }}>
+                {error}
+              </div>
+            )}
 
+            {!issuedCredential ? (
+              <form onSubmit={handleIssue} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
                 <div className="input-group">
                   <label className="input-label">Full Name</label>
                   <input
                     type="text"
-                    placeholder="e.g. Akshith Nallaginnela"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="input-field"
+                    placeholder="e.g. Rahul Sharma"
+                    className="text-input"
                     required
                   />
                 </div>
 
-                <div className="input-row">
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
                   <div className="input-group">
                     <label className="input-label">Birth Year</label>
                     <input
                       type="number"
-                      placeholder="e.g. 2000"
                       min="1900"
-                      max={new Date().getFullYear()}
+                      max="2026"
                       value={birthYear}
                       onChange={(e) => setBirthYear(e.target.value)}
-                      className="input-field"
+                      placeholder="e.g. 1998"
+                      className="text-input"
                       required
                     />
                   </div>
+
                   <div className="input-group">
-                    <label className="input-label">Annual Income (₹)</label>
+                    <label className="input-label">Annual Income (INR)</label>
                     <input
                       type="number"
-                      placeholder="e.g. 800000"
                       value={income}
                       onChange={(e) => setIncome(e.target.value)}
-                      className="input-field"
+                      placeholder="e.g. 750000"
+                      className="text-input"
                       required
                     />
                   </div>
                 </div>
 
                 <div className="input-group">
-                  <label className="input-label">Aadhaar Number (12 digits)</label>
+                  <label className="input-label">12-Digit Aadhaar Number</label>
                   <input
                     type="text"
-                    placeholder="e.g. 123456789012"
+                    maxLength="12"
                     value={aadhaarNumber}
-                    onChange={(e) => setAadhaarNumber(e.target.value.replace(/\D/g, "").slice(0, 12))}
-                    className="input-field"
+                    onChange={(e) => setAadhaarNumber(e.target.value.replace(/\D/g, ""))}
+                    placeholder="12-digit UIDAI number"
+                    className="text-input"
                     required
                   />
                 </div>
 
-                <button type="submit" disabled={loading} className="btn btn-emerald">
-                  {loading ? "Generating digital signature..." : "✍️ Sign & Issue Aadhaar Credential"}
+                <button type="submit" className="btn btn-primary" style={{ width: "100%", height: 44, marginTop: "0.5rem" }} disabled={loading}>
+                  {loading ? "Generating Cryptographic Signature..." : "✍️ Sign & Issue Aadhaar Card"}
                 </button>
               </form>
             ) : (
-              <div style={{ animation: "scaleIn 0.3s ease-out" }}>
-                <div className="status-box success">
-                  <span className="status-icon">✓</span>
-                  <div>
-                    <strong>Aadhaar Card issued successfully!</strong>
-                    {pushedStatus === "success" && (
-                      <div style={{ marginTop: 4, color: "var(--accent-emerald-light)", fontWeight: 700 }}>
-                        🚀 Pushed credential live to synced wallet via WebSockets!
-                      </div>
-                    )}
-                    {pushedStatus === "sending" && <div>Transmitting to wallet room...</div>}
+              <div style={{ animation: "scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)" }}>
+                {/* Visual Issued Card */}
+                <div className="identity-card" style={{ border: "2px solid #059669", background: "linear-gradient(135deg, #ffffff, #f0fdf4)" }}>
+                  <div className="card-top">
+                    <span className="card-emblem">🏛️</span>
+                    <span style={{ fontSize: "0.65rem", fontWeight: 700, color: "#059669" }}>MOCK UIDAI GOVERNMENT OF INDIA</span>
+                  </div>
+                  
+                  <div style={{ padding: "0 4px" }}>
+                    <div style={{ fontSize: "0.85rem", color: "#64748b" }}>NAME</div>
+                    <div className="card-name" style={{ color: "#0f172a" }}>{issuedCredential.subject.name}</div>
+                  </div>
+
+                  <div className="card-grid">
+                    <div>
+                      <div className="card-label">AADHAAR</div>
+                      <div className="card-value" style={{ color: "#0f172a" }}>{getMaskedAadhaar(issuedCredential.subject.aadhaarNumber)}</div>
+                    </div>
+                    <div>
+                      <div className="card-label">DOB (YEAR)</div>
+                      <div className="card-value" style={{ color: "#0f172a" }}>{issuedCredential.subject.birthYear}</div>
+                    </div>
+                    <div>
+                      <div className="card-label">INCOME (PA)</div>
+                      <div className="card-value" style={{ color: "#0f172a" }}>₹{issuedCredential.subject.income.toLocaleString("en-IN")}</div>
+                    </div>
                   </div>
                 </div>
 
-                {/* Identity Card Display */}
-                <div className="identity-card-container">
-                  <div className="identity-card">
-                    <div className="card-top">
-                      <span className="card-logo">🪪</span>
-                      <span className="card-gov-title">Government of India</span>
-                      <span className="card-logo" style={{ color: "#d97706" }}>🇮🇳</span>
-                    </div>
-                    <div className="card-body">
-                      <div className="card-photo-box">👤</div>
-                      <div className="card-info-grid">
-                        <div className="card-info-row">
-                          <span className="card-info-label">Name</span>
-                          <span className="card-info-val">{issuedCredential.subject.name}</span>
-                        </div>
-                        <div className="card-info-row">
-                          <span className="card-info-label">Year of Birth</span>
-                          <span className="card-info-val">{issuedCredential.subject.birthYear}</span>
-                        </div>
-                        <div className="card-info-row">
-                          <span className="card-info-label">Income Group</span>
-                          <span className="card-info-val">₹{issuedCredential.subject.income.toLocaleString()} / year</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="card-bottom">
-                      <span className="card-signature-seal">
-                        🛡️ SEALED BY ECDSA
-                      </span>
-                      <span className="card-id-num">
-                        {getMaskedAadhaar(issuedCredential.subject.aadhaarNumber)}
-                      </span>
-                    </div>
+                {/* Live Sync Pushed Success */}
+                {pushedStatus && (
+                  <div style={{ margin: "1rem 0", padding: "10px 14px", borderRadius: 8, background: pushedStatus === "success" ? "rgba(16,185,129,0.08)" : "rgba(239,68,68,0.08)", border: `1px solid ${pushedStatus === "success" ? "rgba(16,185,129,0.2)" : "rgba(239,68,68,0.2)"}`, display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: "1.2rem" }}>
+                      {pushedStatus === "success" && "✓"}
+                      {pushedStatus === "sending" && "⏳"}
+                      {pushedStatus === "error" && "✗"}
+                    </span>
+                    <span style={{ fontSize: "0.8rem", color: pushedStatus === "success" ? "#065f46" : "#991b1b" }}>
+                      {pushedStatus === "success" && "Credential successfully pushed to customer browser wallet!"}
+                      {pushedStatus === "sending" && "Transmitting verifiable signature to wallet session..."}
+                      {pushedStatus === "error" && "Sync connection lost. Could not push to wallet."}
+                    </span>
                   </div>
-                </div>
+                )}
 
                 {/* Cryptographic Export Payload */}
                 <div className="proof-data">
@@ -427,11 +465,9 @@ export default function App() {
                   </button>
                 </div>
                 
-                {pushedStatus !== "success" && (
-                  <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", textAlign: "center", marginTop: 12 }}>
-                    💡 Paste the token into your ZK Wallet app to import it.
-                  </div>
-                )}
+                <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", textAlign: "center", marginTop: 12 }}>
+                  💡 Paste the token into your ZK Wallet app to import it.
+                </div>
               </div>
             )}
           </div>
