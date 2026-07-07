@@ -56,6 +56,13 @@ export default function AuthScreen({ onLogin, theme = 'vault', title = 'ZeroVaul
     }
   }, [countdown]);
 
+  // Ensure video stream is attached when the video element renders
+  useEffect(() => {
+    if (videoRef.current && videoStream) {
+      videoRef.current.srcObject = videoStream;
+    }
+  }, [videoStream, step]);
+
   const stopWebcam = () => {
     if (videoStream) {
       videoStream.getTracks().forEach((track) => track.stop());
@@ -67,9 +74,6 @@ export default function AuthScreen({ onLogin, theme = 'vault', title = 'ZeroVaul
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 320, facingMode: 'user' } });
       setVideoStream(stream);
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
     } catch (err) {
       setError('Camera access denied. Please grant permission to continue.');
     }
@@ -291,7 +295,7 @@ export default function AuthScreen({ onLogin, theme = 'vault', title = 'ZeroVaul
               
               <div className="auth-face-camera-container" style={{ position: 'relative', width: '200px', height: '200px', margin: '0 auto 1rem', borderRadius: '50%', overflow: 'hidden', border: `4px solid ${scanProgress === 100 ? '#10b981' : accentHex}` }}>
                 {videoStream ? (
-                  <video ref={videoRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }} />
+                  <video ref={videoRef} autoPlay playsInline muted width="320" height="320" onLoadedMetadata={() => videoRef.current && videoRef.current.play()} style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }} />
                 ) : (
                   <div style={{ background: '#334155', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>👤</div>
                 )}

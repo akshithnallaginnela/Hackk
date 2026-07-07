@@ -47,28 +47,33 @@ export async function captureEnrollment(videoElement, onProgress) {
 
   const descriptors = [];
   const captureCount = 4;
-  const delayMs = 500;
+  const delayMs = 400;
+  const maxAttempts = 20; // Allow up to 20 attempts to capture 4 good frames
+  let attempts = 0;
+  let validFrames = 0;
 
-  for (let i = 0; i < captureCount; i++) {
+  while (validFrames < captureCount && attempts < maxAttempts) {
+    attempts++;
+    
     const detection = await faceapi.detectSingleFace(videoElement)
       .withFaceLandmarks()
       .withFaceDescriptor();
 
-    if (!detection) {
-      throw new Error('No face detected. Please face the camera clearly.');
+    // Check if face is detected and confidence is high enough
+    if (detection && detection.detection.score >= 0.75) {
+      descriptors.push(detection.descriptor);
+      validFrames++;
+      if (onProgress) onProgress((validFrames / captureCount) * 100);
     }
     
-    // Check confidence and bounding box to ensure quality
-    if (detection.detection.score < 0.8) {
-      throw new Error('Face not clear enough. Please improve lighting.');
-    }
-
-    descriptors.push(detection.descriptor);
-    if (onProgress) onProgress(((i + 1) / captureCount) * 100);
-
-    if (i < captureCount - 1) {
+    // Wait before next frame
+    if (validFrames < captureCount) {
       await new Promise(r => setTimeout(r, delayMs));
     }
+  }
+
+  if (validFrames < captureCount) {
+    throw new Error('Could not capture enough clear frames. Please face the camera clearly and improve lighting.');
   }
 
   const finalDescriptor = averageDescriptors(descriptors);
