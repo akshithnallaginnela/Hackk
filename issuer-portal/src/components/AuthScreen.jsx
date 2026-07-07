@@ -15,16 +15,15 @@ const STEPS = {
 export default function AuthScreen({ onLogin, theme = 'vault', title = 'ZeroVault' }) {
   const [step, setStep] = useState(STEPS.EMAIL_INPUT);
   const [email, setEmail] = useState('');
-  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [password, setPassword] = useState('');
+  const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   const [retryCount, setRetryCount] = useState(0);
-  const [countdown, setCountdown] = useState(0);
   
   const [videoStream, setVideoStream] = useState(null);
   const videoRef = useRef(null);
-  const otpRefs = useRef([]);
 
   const isGov = theme === 'gov';
   const accentHex = isGov ? '#f97316' : '#4f46e5';
@@ -47,14 +46,6 @@ export default function AuthScreen({ onLogin, theme = 'vault', title = 'ZeroVaul
       stopWebcam();
     };
   }, []);
-
-  // OTP Cooldown timer
-  useEffect(() => {
-    if (countdown > 0) {
-      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [countdown]);
 
   // Ensure video stream is attached when the video element renders
   useEffect(() => {
@@ -82,68 +73,20 @@ export default function AuthScreen({ onLogin, theme = 'vault', title = 'ZeroVaul
   const handleEmailSubmit = async (e) => {
     e.preventDefault();
     if (!email || !email.includes('@')) { setError('Enter a valid email.'); return; }
+    if (password.length < 6) { setError('Password must be at least 6 characters.'); return; }
     setError('');
     setLoading(true);
 
     try {
-      const { error: signInError } = await supabase.auth.signInWithOtp({ email });
-      if (signInError) throw signInError;
-      
-      setCountdown(30);
-      setStep(STEPS.OTP_VERIFY);
+      if (isSignUp) {
+        const { error: signUpError } = await supabase.auth.signUp({ email, password });
+        if (signUpError) throw signUpError;
+      } else {
+        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+        if (signInError) throw signInError;
+      }
     } catch (err) {
-      setError(`OTP Error: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResendOtp = async () => {
-    if (countdown > 0) return;
-    setError('');
-    setLoading(true);
-    try {
-      const { error: resendError } = await supabase.auth.signInWithOtp({ email });
-      if (resendError) throw resendError;
-      setCountdown(30);
-    } catch (err) {
-      setError(`Resend Error: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleOtpChange = (index, value) => {
-    if (!/^\d*$/.test(value)) return;
-    const newOtp = [...otp];
-    newOtp[index] = value;
-    setOtp(newOtp);
-
-    // Auto-advance
-    if (value && index < 5) {
-      otpRefs.current[index + 1].focus();
-    }
-    
-    if (newOtp.every(d => d !== '')) {
-      verifyOtp(newOtp.join(''));
-    }
-  };
-
-  const handleOtpKeyDown = (index, e) => {
-    if (e.key === 'Backspace' && !otp[index] && index > 0) {
-      otpRefs.current[index - 1].focus();
-    }
-  };
-
-  const verifyOtp = async (token) => {
-    setError('');
-    setLoading(true);
-    try {
-      const { error: verifyError } = await supabase.auth.verifyOtp({ email, token, type: 'email' });
-      if (verifyError) throw verifyError;
-      // onAuthStateChange will catch the SIGNED_IN event
-    } catch (err) {
-      setError('Invalid or expired code.');
+      setError(`Auth Error: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -243,41 +186,32 @@ export default function AuthScreen({ onLogin, theme = 'vault', title = 'ZeroVaul
 
           {error && <div className="auth-error-box" style={{ padding: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', borderRadius: '8px', color: '#ef4444', marginBottom: '1rem', fontSize: '0.85rem' }}>{error}</div>}
 
-          {/* Step 1: Email Input */}
+          {/* Step 1: Email & Password Input */}
           {step === STEPS.EMAIL_INPUT && (
             <form onSubmit={handleEmailSubmit}>
               <div className="auth-input-group">
-                <label className="auth-input-label">Email Address</label>
+                <label className="auth-input-label" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', fontWeight: '600' }}>Email Address</label>
                 <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="auth-text-input" placeholder="you@example.com" required autoFocus 
-                  style={{ background: isGov ? '#fff' : 'rgba(255,255,255,0.05)', color: isGov ? '#000' : '#fff', border: '1px solid rgba(150,150,150,0.2)' }}/>
+                  style={{ width: '100%', padding: '0.75rem', marginBottom: '1rem', borderRadius: '8px', background: isGov ? '#fff' : 'rgba(255,255,255,0.05)', color: isGov ? '#000' : '#fff', border: '1px solid rgba(150,150,150,0.2)' }}/>
               </div>
-              <button type="submit" className="auth-btn auth-btn-primary" style={{ background: accentHex, width: '100%', marginTop: '1rem' }} disabled={loading}>
-                {loading ? 'Processing...' : 'Continue'}
-              </button>
-            </form>
-          )}
+              
+              <div className="auth-input-group">
+                <label className="auth-input-label" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', fontWeight: '600' }}>Password</label>
+                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="auth-text-input" placeholder="••••••••" required 
+                  style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', background: isGov ? '#fff' : 'rgba(255,255,255,0.05)', color: isGov ? '#000' : '#fff', border: '1px solid rgba(150,150,150,0.2)' }}/>
+              </div>
 
-          {/* Step 2: OTP Verification */}
-          {step === STEPS.OTP_VERIFY && (
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ fontSize: '0.9rem', marginBottom: '1rem' }}>Enter the 6-digit code sent to <strong>{email}</strong></p>
+              <button type="submit" className="auth-btn auth-btn-primary" style={{ background: accentHex, width: '100%', marginTop: '1.5rem', padding: '0.75rem', borderRadius: '8px', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }} disabled={loading}>
+                {loading ? 'Processing...' : (isSignUp ? 'Create Account' : 'Sign In')}
+              </button>
               
-              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', marginBottom: '1.5rem' }}>
-                {otp.map((digit, idx) => (
-                  <input key={idx} ref={el => otpRefs.current[idx] = el} type="text" maxLength={1} value={digit}
-                    onChange={e => handleOtpChange(idx, e.target.value)}
-                    onKeyDown={e => handleOtpKeyDown(idx, e)}
-                    style={{ width: '40px', height: '48px', textAlign: 'center', fontSize: '1.25rem', borderRadius: '8px', background: isGov ? '#fff' : 'rgba(255,255,255,0.05)', color: isGov ? '#000' : '#fff', border: `1px solid ${accentHex}` }}
-                  />
-                ))}
+              <div style={{ textAlign: 'center', marginTop: '1rem', fontSize: '0.85rem' }}>
+                <span style={{ color: '#94a3b8' }}>{isSignUp ? 'Already have an account?' : 'Need an account?'}</span>
+                <button type="button" onClick={() => setIsSignUp(!isSignUp)} style={{ background: 'none', border: 'none', color: accentHex, marginLeft: '0.5rem', cursor: 'pointer', fontWeight: 'bold' }}>
+                  {isSignUp ? 'Log In' : 'Sign Up'}
+                </button>
               </div>
-              
-              <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-                {countdown > 0 ? `Resend code in ${countdown}s` : <button onClick={handleResendOtp} style={{ background: 'none', border: 'none', color: accentHex, cursor: 'pointer' }}>Resend Code</button>}
-              </div>
-              
-              <button onClick={() => setStep(STEPS.EMAIL_INPUT)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', marginTop: '1rem', fontSize: '0.8rem' }}>Change Email</button>
-            </div>
+            </form>
           )}
 
           {/* Step 3: Face Loading */}
