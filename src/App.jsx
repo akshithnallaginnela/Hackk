@@ -7,10 +7,11 @@ import GeminiAssistant from "./components/GeminiAssistant";
 import ProofHistory from "./components/ProofHistory";
 import Settings from "./components/Settings";
 import TutorialWizard from "./components/TutorialWizard";
+import ClaimSelector from "./components/ClaimSelector";
 
 export default function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(true);
-  const [currentUser, setCurrentUser] = useState({ name: "Developer", email: "dev@zerovault.id" });
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
   const [activePage, setActivePage] = useState("dashboard"); // dashboard | wallet | verifier | settings
 
   const handleLogin = (user) => {

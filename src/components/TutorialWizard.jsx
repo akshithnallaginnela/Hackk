@@ -38,7 +38,6 @@ export default function TutorialWizard({ onComplete, onSkipToLogin }) {
       }
 
       setEmailSent(true);
-      if (data.testPreviewUrl) setDevMailLink(data.testPreviewUrl);
       if (data.demoCode) setDevMailCode(data.demoCode);
     } catch (err) {
       setError(err.message);
@@ -53,7 +52,7 @@ export default function TutorialWizard({ onComplete, onSkipToLogin }) {
     setError("");
 
     try {
-      const response = await fetch(`${getBackendUrl()}/api/auth/wallet/login-pin`, {
+      const response = await fetch(`${getBackendUrl()}/api/auth/wallet/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, pin: otpPin })
@@ -64,7 +63,7 @@ export default function TutorialWizard({ onComplete, onSkipToLogin }) {
         throw new Error(data.error || "Onboarding verification PIN mismatch.");
       }
 
-      // Completed onboarding
+      localStorage.setItem("zerovault_token", data.token);
       localStorage.setItem("zerovault_user_email", data.user.email);
       onComplete(data.user);
     } catch (err) {

@@ -26,7 +26,7 @@ export default function AdminConsole() {
     setDevMailCode(null);
 
     try {
-      const response = await fetch(`${getBackendUrl()}/api/auth/admin/register-employee`, {
+      const response = await fetch(`${getBackendUrl()}/api/auth/gov/register-employee`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email, department })

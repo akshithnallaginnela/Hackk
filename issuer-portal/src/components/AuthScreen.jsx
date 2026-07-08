@@ -1,53 +1,40 @@
-import { useState, useEffect, useRef } from 'react';
-import { supabase } from '../utils/supabaseClient';
-import { captureEnrollment, verifyFace, loadModels } from '../utils/faceBiometrics';
+import { useState, useRef, useEffect } from 'react';
+import { loadModels, captureEnrollment, captureSingleDescriptor } from '../utils/faceBiometrics';
 
-// State Machine Steps
 const STEPS = {
   EMAIL_INPUT: 'EMAIL_INPUT',
-  OTP_VERIFY: 'OTP_VERIFY',
-  FACE_PREPARE: 'FACE_PREPARE', // loading models
+  ONBOARD: 'ONBOARD',
+  PIN_INPUT: 'PIN_INPUT',
+  FACE_PREPARE: 'FACE_PREPARE',
   FACE_ENROLL: 'FACE_ENROLL',
   FACE_LOGIN: 'FACE_LOGIN',
   SUCCESS: 'SUCCESS'
 };
 
-export default function AuthScreen({ onLogin, theme = 'vault', title = 'ZeroVault' }) {
+const getBackendUrl = () => import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080';
+
+export default function AuthScreen({ onLogin, theme = 'gov', title = 'UIDAI Issuer Portal', subtitle = 'Ministry of Electronics & IT' }) {
   const [step, setStep] = useState(STEPS.EMAIL_INPUT);
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [pin, setPin] = useState('');
+  const [tempId, setTempId] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
-  const [retryCount, setRetryCount] = useState(0);
-  
+  const [hasFaceId, setHasFaceId] = useState(false);
+  const [demoCode, setDemoCode] = useState(null);
+  const [userName, setUserName] = useState('');
+
   const [videoStream, setVideoStream] = useState(null);
   const videoRef = useRef(null);
 
   const isGov = theme === 'gov';
   const accentHex = isGov ? '#f97316' : '#4f46e5';
 
-  // Handle Supabase Auth State changes
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session) {
-        // OTP succeeded, check if face is enrolled
-        setStep(STEPS.FACE_PREPARE);
-        await checkFaceEnrollment(session.user.id);
-      } else if (event === 'SIGNED_OUT') {
-        stopWebcam();
-        setStep(STEPS.EMAIL_INPUT);
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
-      stopWebcam();
-    };
+    return () => stopWebcam();
   }, []);
 
-  // Ensure video stream is attached when the video element renders
   useEffect(() => {
     if (videoRef.current && videoStream) {
       videoRef.current.srcObject = videoStream;
@@ -56,7 +43,7 @@ export default function AuthScreen({ onLogin, theme = 'vault', title = 'ZeroVaul
 
   const stopWebcam = () => {
     if (videoStream) {
-      videoStream.getTracks().forEach((track) => track.stop());
+      videoStream.getTracks().forEach(t => t.stop());
       setVideoStream(null);
     }
   };
@@ -65,55 +52,93 @@ export default function AuthScreen({ onLogin, theme = 'vault', title = 'ZeroVaul
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 320, facingMode: 'user' } });
       setVideoStream(stream);
-    } catch (err) {
-      setError('Camera access denied. Please grant permission to continue.');
+    } catch {
+      setError('Camera access denied.');
     }
   };
 
-  const handleEmailSubmit = async (e) => {
+  const checkEmail = async (e) => {
     e.preventDefault();
     if (!email || !email.includes('@')) { setError('Enter a valid email.'); return; }
-    if (password.length < 6) { setError('Password must be at least 6 characters.'); return; }
     setError('');
     setLoading(true);
-
     try {
-      if (isSignUp) {
-        const { error: signUpError } = await supabase.auth.signUp({ email, password });
-        if (signUpError) throw signUpError;
-      } else {
-        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-        if (signInError) throw signInError;
+      const res = await fetch(`${getBackendUrl()}/api/auth/gov/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, pin: '000000' })
+      });
+      const data = await res.json();
+      if (res.status === 400) {
+        if (data.error === 'No employee found for this email.') {
+          setError('No employee registered with this email. Contact admin.');
+        } else if (data.error === 'No PIN configured. Complete onboarding first.') {
+          setStep(STEPS.ONBOARD);
+        } else {
+          setStep(STEPS.PIN_INPUT);
+        }
+      } else if (res.ok) {
+        setStep(STEPS.PIN_INPUT);
       }
-    } catch (err) {
-      setError(`Auth Error: ${err.message}`);
+    } catch {
+      setError('Could not reach server.');
     } finally {
       setLoading(false);
     }
   };
 
-  const checkFaceEnrollment = async (userId) => {
+  const handleOnboard = async (e) => {
+    e.preventDefault();
+    if (!tempId) { setError('Enter your Temporary ID.'); return; }
+    setLoading(true);
+    setError('');
     try {
-      setLoading(true);
-      await loadModels(); // load face-api models
-      
-      const { data, error: fetchError } = await supabase
-        .from('user_face_descriptors')
-        .select('descriptor')
-        .eq('user_id', userId)
-        .single();
-        
-      await startWebcam();
+      const res = await fetch(`${getBackendUrl()}/api/auth/gov/onboard`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, tempId })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setDemoCode(data.demoCode);
+      setUserName(data.user.name);
+      setStep(STEPS.PIN_INPUT);
+    } catch (err) {
+      setError(err.message);
+    } finally {
       setLoading(false);
+    }
+  };
 
-      if (data && data.descriptor) {
+  const handlePinLogin = async (e) => {
+    e.preventDefault();
+    if (!pin) { setError('Enter your PIN.'); return; }
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/auth/gov/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, pin })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      localStorage.setItem('gov_token', data.token);
+      setHasFaceId(data.hasFaceId);
+      if (data.hasFaceId) {
+        setStep(STEPS.FACE_PREPARE);
+        await startWebcam();
+        setLoading(false);
         setStep(STEPS.FACE_LOGIN);
-        doFaceLogin(data.descriptor);
       } else {
+        setStep(STEPS.FACE_PREPARE);
+        await startWebcam();
+        setLoading(false);
         setStep(STEPS.FACE_ENROLL);
       }
     } catch (err) {
-      setError(`Biometric setup failed: ${err.message}`);
+      setError(err.message);
+    } finally {
       setLoading(false);
     }
   };
@@ -121,47 +146,40 @@ export default function AuthScreen({ onLogin, theme = 'vault', title = 'ZeroVaul
   const doFaceEnrollment = async () => {
     setError('');
     setScanProgress(0);
+    await loadModels();
     try {
-      // Capture 4 frames over 2 seconds
-      const descriptorArray = await captureEnrollment(videoRef.current, (prog) => {
-        setScanProgress(prog);
+      const descriptor = await captureEnrollment(videoRef.current, (p) => setScanProgress(p));
+      const token = localStorage.getItem('gov_token');
+      const res = await fetch(`${getBackendUrl()}/api/auth/gov/face/enroll`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ faceTemplate: descriptor })
       });
-      
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      // Store in Supabase
-      const { error: insertError } = await supabase
-        .from('user_face_descriptors')
-        .insert({ user_id: session.user.id, descriptor: descriptorArray });
-
-      if (insertError) throw insertError;
-      
-      handleSuccess(session.user);
+      if (!res.ok) throw new Error('Failed to enroll face.');
+      handleSuccess({ name: userName || email, email });
     } catch (err) {
-      setError(`Enrollment failed: ${err.message}`);
-      setScanProgress(0);
+      setError(err.message);
     }
   };
 
-  const doFaceLogin = async (storedDescriptor) => {
-    if (retryCount >= 3) {
-      setError('Max retries exceeded. Please contact support or use account recovery.');
-      return;
-    }
-    
+  const doFaceLogin = async () => {
     setError('');
-    setScanProgress(30); // Show some visual feedback that matching started
-    
+    setScanProgress(30);
+    await loadModels();
     try {
-      const result = await verifyFace(videoRef.current, storedDescriptor);
-      if (result.matched) {
-        setScanProgress(100);
-        const { data: { session } } = await supabase.auth.getSession();
-        handleSuccess(session.user);
-      }
+      const descriptor = await captureSingleDescriptor(videoRef.current);
+      const res = await fetch(`${getBackendUrl()}/api/auth/gov/face/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, faceTemplate: descriptor })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      localStorage.setItem('gov_token', data.token);
+      setScanProgress(100);
+      handleSuccess(data.user);
     } catch (err) {
-      setRetryCount(prev => prev + 1);
-      setError(`${err.message} (Attempt ${retryCount + 1} of 3)`);
+      setError(err.message);
       setScanProgress(0);
     }
   };
@@ -174,95 +192,102 @@ export default function AuthScreen({ onLogin, theme = 'vault', title = 'ZeroVaul
 
   return (
     <div className={`auth-screen ${step === STEPS.SUCCESS ? 'auth-exit' : ''}`}
-         style={{ background: isGov ? 'linear-gradient(145deg, #faf9f6 0%, #fff7ed 30%, #f5f4ef 60%, #ecfdf5 100%)' : 'linear-gradient(145deg, #09090e 0%, #111122 30%, #080812 60%, #0f172a 100%)' }}>
-      
+         style={{ background: 'linear-gradient(145deg, #faf9f6 0%, #fff7ed 30%, #f5f4ef 60%, #ecfdf5 100%)' }}>
       <div className="auth-container">
-        <div className="auth-card" style={{ background: isGov ? 'rgba(255, 255, 255, 0.85)' : 'rgba(17, 17, 27, 0.65)', color: isGov ? '#0f172a' : '#f8fafc' }}>
-          
+        <div className="auth-card" style={{ background: 'rgba(255, 255, 255, 0.85)', color: '#0f172a' }}>
           <div className="auth-brand" style={{ textAlign: 'center', marginBottom: '2rem' }}>
-            <h1 className="auth-title" style={{ background: `linear-gradient(135deg, ${accentHex}, ${isGov ? '#ea580c' : '#818cf8'})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{title}</h1>
-            <p style={{ color: isGov ? '#475569' : '#94a3b8', fontSize: '0.85rem' }}>Secure Two-Factor Identity Portal</p>
+            <h1 className="auth-title" style={{ background: `linear-gradient(135deg, ${accentHex}, #ea580c)`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{title}</h1>
+            <p style={{ color: '#475569', fontSize: '0.85rem' }}>{subtitle}</p>
           </div>
 
-          {error && <div className="auth-error-box" style={{ padding: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', borderRadius: '8px', color: '#ef4444', marginBottom: '1rem', fontSize: '0.85rem' }}>{error}</div>}
+          {demoCode && (
+            <div className="dev-mail-helper" style={{ marginBottom: '1rem' }}>
+              <div className="dev-mail-header">DEVELOPER CONSOLE</div>
+              <div className="dev-mail-body">Your temporary PIN: <strong>{demoCode}</strong></div>
+            </div>
+          )}
 
-          {/* Step 1: Email & Password Input */}
+          {error && <div className="auth-error-box" style={{ marginBottom: '1rem' }}>{error}</div>}
+
           {step === STEPS.EMAIL_INPUT && (
-            <form onSubmit={handleEmailSubmit}>
+            <form onSubmit={checkEmail}>
               <div className="auth-input-group">
-                <label className="auth-input-label" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', fontWeight: '600' }}>Email Address</label>
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="auth-text-input" placeholder="you@example.com" required autoFocus 
-                  style={{ width: '100%', padding: '0.75rem', marginBottom: '1rem', borderRadius: '8px', background: isGov ? '#fff' : 'rgba(255,255,255,0.05)', color: isGov ? '#000' : '#fff', border: '1px solid rgba(150,150,150,0.2)' }}/>
+                <label className="auth-input-label">Official Email Address</label>
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="auth-text-input" placeholder="officer@zerovault.gov.in" required autoFocus />
               </div>
-              
-              <div className="auth-input-group">
-                <label className="auth-input-label" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', fontWeight: '600' }}>Password</label>
-                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="auth-text-input" placeholder="••••••••" required 
-                  style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', background: isGov ? '#fff' : 'rgba(255,255,255,0.05)', color: isGov ? '#000' : '#fff', border: '1px solid rgba(150,150,150,0.2)' }}/>
-              </div>
-
               <button type="submit" className="auth-btn auth-btn-primary" style={{ background: accentHex, width: '100%', marginTop: '1.5rem', padding: '0.75rem', borderRadius: '8px', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }} disabled={loading}>
-                {loading ? 'Processing...' : (isSignUp ? 'Create Account' : 'Sign In')}
+                {loading ? 'Checking...' : 'Continue'}
               </button>
-              
-              <div style={{ textAlign: 'center', marginTop: '1rem', fontSize: '0.85rem' }}>
-                <span style={{ color: '#94a3b8' }}>{isSignUp ? 'Already have an account?' : 'Need an account?'}</span>
-                <button type="button" onClick={() => setIsSignUp(!isSignUp)} style={{ background: 'none', border: 'none', color: accentHex, marginLeft: '0.5rem', cursor: 'pointer', fontWeight: 'bold' }}>
-                  {isSignUp ? 'Log In' : 'Sign Up'}
-                </button>
+            </form>
+          )}
+
+          {step === STEPS.ONBOARD && (
+            <form onSubmit={handleOnboard}>
+              <h3 style={{ marginBottom: '1rem', color: '#ea580c' }}>First-Time Onboarding</h3>
+              <p style={{ fontSize: '0.85rem', color: '#475569', marginBottom: '1rem' }}>Enter the Temporary Access ID you received via email to generate your initial security PIN.</p>
+              <div className="auth-input-group">
+                <label className="auth-input-label">Temporary Access ID</label>
+                <input type="text" value={tempId} onChange={(e) => setTempId(e.target.value)} className="auth-text-input" placeholder="GOV-EMP-XXXX" required />
+              </div>
+              <button type="submit" className="auth-btn auth-btn-primary" style={{ background: accentHex, width: '100%', marginTop: '1.5rem', padding: '0.75rem', borderRadius: '8px', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }} disabled={loading}>
+                {loading ? 'Validating...' : 'Generate My PIN'}
+              </button>
+              <div style={{ textAlign: 'center', marginTop: '1rem' }}>
+                <button type="button" onClick={() => setStep(STEPS.EMAIL_INPUT)} style={{ background: 'none', border: 'none', color: accentHex, cursor: 'pointer', fontSize: '0.85rem' }}>← Back</button>
               </div>
             </form>
           )}
 
-          {/* Step 3: Face Loading */}
+          {step === STEPS.PIN_INPUT && (
+            <form onSubmit={handlePinLogin}>
+              <h3 style={{ marginBottom: '1rem' }}>Enter Security PIN</h3>
+              <div className="auth-input-group">
+                <input type="password" maxLength={6} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} className="auth-code-input auth-pin-input" placeholder="• • • • • •" style={{ letterSpacing: '12px', fontSize: '1.5rem', padding: '10px', textAlign: 'center' }} autoFocus required />
+              </div>
+              <button type="submit" className="auth-btn auth-btn-primary" style={{ background: accentHex, width: '100%', marginTop: '1.5rem', padding: '0.75rem', borderRadius: '8px', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }} disabled={loading}>
+                {loading ? 'Verifying...' : 'Unlock Portal'}
+              </button>
+              <div style={{ textAlign: 'center', marginTop: '1rem' }}>
+                <button type="button" onClick={() => { setStep(STEPS.EMAIL_INPUT); setDemoCode(null); }} style={{ background: 'none', border: 'none', color: accentHex, cursor: 'pointer', fontSize: '0.85rem' }}>← Different email</button>
+              </div>
+            </form>
+          )}
+
           {step === STEPS.FACE_PREPARE && (
             <div style={{ textAlign: 'center', padding: '2rem' }}>
               <div className="spinner" style={{ margin: '0 auto 1rem', width: '30px', height: '30px', border: `3px solid rgba(0,0,0,0.1)`, borderTopColor: accentHex, borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-              <p>Initializing AI Biometrics...</p>
+              <p>Preparing biometrics...</p>
             </div>
           )}
 
-          {/* Step 4: Face Enroll / Login */}
           {(step === STEPS.FACE_ENROLL || step === STEPS.FACE_LOGIN) && (
             <div className="auth-scan-view" style={{ textAlign: 'center' }}>
-              <h3 style={{ margin: '0 0 1rem 0' }}>{step === STEPS.FACE_ENROLL ? 'Face Enrollment' : 'Face Verification'}</h3>
-              
+              <h3 style={{ margin: '0 0 1rem 0' }}>{step === STEPS.FACE_ENROLL ? 'Enroll Face ID' : 'Face Verification'}</h3>
               <div className="auth-face-camera-container" style={{ position: 'relative', width: '200px', height: '200px', margin: '0 auto 1rem', borderRadius: '50%', overflow: 'hidden', border: `4px solid ${scanProgress === 100 ? '#10b981' : accentHex}` }}>
                 {videoStream ? (
-                  <video ref={videoRef} autoPlay playsInline muted width="320" height="320" onLoadedMetadata={() => videoRef.current && videoRef.current.play()} style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }} />
+                  <video ref={videoRef} autoPlay playsInline muted width="320" height="320" style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }} />
                 ) : (
-                  <div style={{ background: '#334155', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>👤</div>
+                  <div style={{ background: '#cbd5e1', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>👤</div>
                 )}
               </div>
-              
               <div className="auth-progress-bar" style={{ width: '80%', margin: '0 auto 1rem', height: '4px', background: 'rgba(150,150,150,0.2)', borderRadius: '2px' }}>
                 <div style={{ width: `${scanProgress}%`, background: accentHex, height: '100%', transition: 'width 0.3s ease' }} />
               </div>
-
               {step === STEPS.FACE_ENROLL && (
                 <>
-                  <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: '1rem' }}>We'll capture 4 frames to build a stable mathematical descriptor. Look straight at the camera.</p>
-                  <button onClick={doFaceEnrollment} className="auth-btn auth-btn-primary" style={{ background: accentHex, width: '100%' }}>Start Scan</button>
+                  <p style={{ fontSize: '0.8rem', color: '#475569', marginBottom: '1rem' }}>Look straight at the camera. We'll capture 4 frames.</p>
+                  <button onClick={doFaceEnrollment} className="auth-btn auth-btn-primary" style={{ background: accentHex, width: '100%' }}>Start Enrollment</button>
                 </>
               )}
-
               {step === STEPS.FACE_LOGIN && (
                 <>
-                  <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: '1rem' }}>Please verify your identity. A liveness check requires slight natural movement.</p>
-                  <button onClick={() => {
-                    const checkFace = async () => {
-                      const { data: { session } } = await supabase.auth.getSession();
-                      const { data } = await supabase.from('user_face_descriptors').select('descriptor').eq('user_id', session.user.id).single();
-                      if(data) doFaceLogin(data.descriptor);
-                    };
-                    checkFace();
-                  }} className="auth-btn auth-btn-primary" style={{ background: accentHex, width: '100%' }}>Verify Now</button>
+                  <p style={{ fontSize: '0.8rem', color: '#475569', marginBottom: '1rem' }}>Verify your identity with Face ID.</p>
+                  <button onClick={doFaceLogin} className="auth-btn auth-btn-primary" style={{ background: accentHex, width: '100%' }}>Verify Now</button>
                 </>
               )}
             </div>
           )}
 
-          {/* Step 5: Success */}
           {step === STEPS.SUCCESS && (
             <div className="auth-success" style={{ textAlign: 'center', padding: '2rem' }}>
               <span style={{ fontSize: '3rem' }}>✅</span>
@@ -271,9 +296,7 @@ export default function AuthScreen({ onLogin, theme = 'vault', title = 'ZeroVaul
           )}
         </div>
       </div>
-      <style>{`
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-      `}</style>
+      <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
