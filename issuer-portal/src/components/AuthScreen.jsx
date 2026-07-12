@@ -3,6 +3,7 @@ import { loadModels, captureEnrollment, captureSingleDescriptor } from '../utils
 
 const STEPS = {
   EMAIL_INPUT: 'EMAIL_INPUT',
+  REGISTER: 'REGISTER',
   ONBOARD: 'ONBOARD',
   PIN_INPUT: 'PIN_INPUT',
   FACE_PREPARE: 'FACE_PREPARE',
@@ -18,6 +19,9 @@ export default function AuthScreen({ onLogin, theme = 'gov', title = 'UIDAI Issu
   const [email, setEmail] = useState('');
   const [pin, setPin] = useState('');
   const [tempId, setTempId] = useState('');
+  const [regName, setRegName] = useState('');
+  const [regDepartment, setRegDepartment] = useState('Aadhaar Verification Dept');
+  const [generatedTempId, setGeneratedTempId] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
@@ -71,7 +75,7 @@ export default function AuthScreen({ onLogin, theme = 'gov', title = 'UIDAI Issu
       const data = await res.json();
       if (res.status === 400) {
         if (data.error === 'No employee found for this email.') {
-          setError('No employee registered with this email. Contact admin.');
+          setStep(STEPS.REGISTER);
         } else if (data.error === 'No PIN configured. Complete onboarding first.') {
           setStep(STEPS.ONBOARD);
         } else {
@@ -82,6 +86,29 @@ export default function AuthScreen({ onLogin, theme = 'gov', title = 'UIDAI Issu
       }
     } catch {
       setError('Could not reach server.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRegisterEmployee = async (e) => {
+    e.preventDefault();
+    if (!regName) { setError('Enter the employee name.'); return; }
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/auth/gov/register-employee`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: regName, email, department: regDepartment })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setGeneratedTempId(data.tempId);
+      setDemoCode(data.tempId);
+      setStep(STEPS.ONBOARD);
+    } catch (err) {
+      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -221,10 +248,36 @@ export default function AuthScreen({ onLogin, theme = 'gov', title = 'UIDAI Issu
             </form>
           )}
 
+          {step === STEPS.REGISTER && (
+            <form onSubmit={handleRegisterEmployee}>
+              <h3 style={{ marginBottom: '0.5rem', color: '#ea580c' }}>Register New Officer</h3>
+              <p style={{ fontSize: '0.85rem', color: '#475569', marginBottom: '1rem' }}>No account found for <strong>{email}</strong>. Fill in the details to register.</p>
+              <div className="auth-input-group">
+                <label className="auth-input-label">Full Name</label>
+                <input type="text" value={regName} onChange={(e) => setRegName(e.target.value)} className="auth-text-input" placeholder="e.g. Officer Name" required />
+              </div>
+              <div className="auth-input-group">
+                <label className="auth-input-label">Department</label>
+                <select value={regDepartment} onChange={(e) => setRegDepartment(e.target.value)} className="auth-text-input" style={{ padding: '0.75rem' }}>
+                  <option value="Aadhaar Verification Dept">Aadhaar Verification Division</option>
+                  <option value="Biometric Data Center">Biometric Data Center</option>
+                  <option value="SSI Security Audits">SSI Security Auditing Team</option>
+                  <option value="Gateway Portal Registry">Gateway Portal Registry Administration</option>
+                </select>
+              </div>
+              <button type="submit" className="auth-btn auth-btn-primary" style={{ background: accentHex, width: '100%', marginTop: '1.5rem', padding: '0.75rem', borderRadius: '8px', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }} disabled={loading}>
+                {loading ? 'Registering...' : 'Register & Get Temp ID'}
+              </button>
+              <div style={{ textAlign: 'center', marginTop: '1rem' }}>
+                <button type="button" onClick={() => setStep(STEPS.EMAIL_INPUT)} style={{ background: 'none', border: 'none', color: accentHex, cursor: 'pointer', fontSize: '0.85rem' }}>← Different email</button>
+              </div>
+            </form>
+          )}
+
           {step === STEPS.ONBOARD && (
             <form onSubmit={handleOnboard}>
-              <h3 style={{ marginBottom: '1rem', color: '#ea580c' }}>First-Time Onboarding</h3>
-              <p style={{ fontSize: '0.85rem', color: '#475569', marginBottom: '1rem' }}>Enter the Temporary Access ID you received via email to generate your initial security PIN.</p>
+              <h3 style={{ marginBottom: '0.5rem', color: '#ea580c' }}>First-Time Onboarding</h3>
+              <p style={{ fontSize: '0.85rem', color: '#475569', marginBottom: '0.5rem' }}>Enter the Temporary Access ID to generate your security PIN.</p>
               <div className="auth-input-group">
                 <label className="auth-input-label">Temporary Access ID</label>
                 <input type="text" value={tempId} onChange={(e) => setTempId(e.target.value)} className="auth-text-input" placeholder="GOV-EMP-XXXX" required />
