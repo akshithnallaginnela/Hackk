@@ -93,13 +93,14 @@ export default function VerifierPortal() {
         wsRef.current.close();
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionCode]);
 
-  const addLog = (msg) => {
+  function addLog(msg) {
     setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
-  };
+  }
 
-  const runFraudCheck = async () => {
+  async function runFraudCheck() {
     try {
       const history = JSON.parse(localStorage.getItem("proofHistory") || "[]");
       if (history.length >= 2) {
@@ -115,9 +116,9 @@ export default function VerifierPortal() {
     } catch (err) {
       console.error("Fraud analysis failed:", err);
     }
-  };
+  }
 
-  const getClaimLabel = (claim) => {
+  function getClaimLabel(claim) {
     if (!claim) return "";
     switch (claim) {
       case "age_gte_18": return "Age ≥ 18";
@@ -125,7 +126,7 @@ export default function VerifierPortal() {
       case "aadhaar_valid": return "Aadhaar Validity Check";
       default: return claim;
     }
-  };
+  }
 
   const resetTerminal = () => {
     setResult(null);

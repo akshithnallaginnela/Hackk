@@ -87,7 +87,7 @@ async function verifySimulatedProof(proofData) {
   const claimResult = publicSignals[0] === "1";
 
   // Build verification result
-  let details = {};
+  let details;
   switch (claim) {
     case "age_gte_18":
       details = {

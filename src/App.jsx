@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import AuthScreen from "./components/AuthScreen";
 import Dashboard from "./components/Dashboard";
 import ProverWallet from "./components/ProverWallet";
@@ -13,18 +13,53 @@ export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [activePage, setActivePage] = useState("dashboard"); // dashboard | wallet | verifier | settings
+  const [showTutorial, setShowTutorial] = useState(() => {
+    return !localStorage.getItem("zerovault_token");
+  });
+
+  useEffect(() => {
+    const token = localStorage.getItem("zerovault_token");
+    const userEmail = localStorage.getItem("zerovault_user_email");
+    if (token && userEmail) {
+      setCurrentUser({ email: userEmail });
+      setIsLoggedIn(true);
+      setShowTutorial(false);
+    }
+  }, []);
 
   const handleLogin = (user) => {
     setCurrentUser(user);
     setIsLoggedIn(true);
+    if (user && user.email) {
+      localStorage.setItem("zerovault_user_email", user.email);
+    }
     setActivePage("dashboard");
   };
 
   const handleLogout = () => {
     setIsLoggedIn(false);
     setCurrentUser(null);
+    localStorage.removeItem("zerovault_token");
+    localStorage.removeItem("zerovault_user_email");
     setActivePage("dashboard");
   };
+
+  if (!isLoggedIn) {
+    if (showTutorial) {
+      return (
+        <TutorialWizard
+          onComplete={handleLogin}
+          onSkipToLogin={() => setShowTutorial(false)}
+        />
+      );
+    } else {
+      return (
+        <AuthScreen
+          onLogin={handleLogin}
+        />
+      );
+    }
+  }
 
   return (
     <>

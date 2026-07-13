@@ -13,7 +13,7 @@ export async function loadModels() {
     ]);
     modelsLoaded = true;
   } catch (error) {
-    throw new Error('Failed to load biometric models.');
+    throw new Error('Failed to load biometric models.', { cause: error });
   }
 }
 
