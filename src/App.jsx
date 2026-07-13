@@ -10,20 +10,19 @@ import TutorialWizard from "./components/TutorialWizard";
 import ClaimSelector from "./components/ClaimSelector";
 
 export default function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
-  const [activePage, setActivePage] = useState("dashboard"); // dashboard | wallet | verifier | settings
-  const [showTutorial, setShowTutorial] = useState(() => {
-    return !localStorage.getItem("zerovault_token");
+  const [isLoggedIn, setIsLoggedIn] = useState(true);
+  const [currentUser, setCurrentUser] = useState({
+    name: "Default Prover",
+    email: "prover@example.com"
   });
+  const [activePage, setActivePage] = useState("dashboard"); // dashboard | wallet | verifier | settings
+  const [showTutorial, setShowTutorial] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem("zerovault_token");
     const userEmail = localStorage.getItem("zerovault_user_email");
     if (token && userEmail) {
-      setCurrentUser({ email: userEmail });
-      setIsLoggedIn(true);
-      setShowTutorial(false);
+      setCurrentUser({ email: userEmail, name: "Default Prover" });
     }
   }, []);
 
@@ -37,29 +36,8 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    setIsLoggedIn(false);
-    setCurrentUser(null);
-    localStorage.removeItem("zerovault_token");
-    localStorage.removeItem("zerovault_user_email");
-    setActivePage("dashboard");
+    alert("Lock/Logout is disabled in open access mode.");
   };
-
-  if (!isLoggedIn) {
-    if (showTutorial) {
-      return (
-        <TutorialWizard
-          onComplete={handleLogin}
-          onSkipToLogin={() => setShowTutorial(false)}
-        />
-      );
-    } else {
-      return (
-        <AuthScreen
-          onLogin={handleLogin}
-        />
-      );
-    }
-  }
 
   return (
     <>

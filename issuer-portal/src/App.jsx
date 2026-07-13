@@ -17,8 +17,13 @@ const getBackendUrls = () => {
 const BACKEND_URLS = getBackendUrls();
 
 export default function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(true);
+  const [currentUser, setCurrentUser] = useState({
+    name: "Default Officer",
+    email: "officer@zerovault.gov.in",
+    department: "Aadhaar Verification Division",
+    status: "active"
+  });
   const [activePage, setActivePage] = useState("dashboard"); // dashboard | terminal | settings | admin
 
   // Issuance form states
@@ -190,22 +195,8 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    setIsLoggedIn(false);
-    setCurrentUser(null);
-    setActivePage("dashboard");
-    disconnectSession();
+    alert("Lock/Logout is disabled in open access mode.");
   };
-
-  if (!isLoggedIn) {
-    return (
-      <AuthScreen
-        onLogin={handleLoginSuccess}
-        theme="gov"
-        title="UIDAI Issuer Portal"
-        subtitle="Ministry of Electronics & IT, Government of India"
-      />
-    );
-  }
 
   return (
     <>
