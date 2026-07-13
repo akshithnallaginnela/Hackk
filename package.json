@@ -11,13 +11,15 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
-    "@supabase/supabase-js": "^2.110.0",
+
+    "bcryptjs": "^3.0.3",
     "circomlib": "^2.0.5",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "face-api.js": "^0.22.2",
     "framer-motion": "^12.40.0",
+    "jsonwebtoken": "^9.0.3",
     "lucide-react": "^1.16.0",
     "pg": "^8.22.0",
     "react": "^19.2.6",

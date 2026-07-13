@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { loadModels, captureEnrollment } from "../utils/faceBiometrics";
 
 export default function Settings({ user, onUpdateUser }) {
   const [pin, setPin] = useState("");
@@ -7,41 +8,40 @@ export default function Settings({ user, onUpdateUser }) {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
+  const [scanProgress, setScanProgress] = useState(0);
 
-  // Biometrics webcam state
   const [showCamera, setShowCamera] = useState(false);
   const [cameraStream, setCameraStream] = useState(null);
-  const [capturedPhoto, setCapturedPhoto] = useState(null);
   const videoRef = useRef(null);
 
   const getBackendUrl = () => {
     return import.meta.env.VITE_BACKEND_URL || "http://localhost:8080";
   };
 
-  useEffect(() => {
-    return () => {
-      stopCamera();
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem("zerovault_token");
+    return {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     };
+  };
+
+  useEffect(() => {
+    return () => stopCamera();
   }, []);
 
   const startCamera = async () => {
     setError("");
     setSuccess("");
-    setCapturedPhoto(null);
     setShowCamera(true);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 320, height: 320, facingMode: "user" }
-      });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 320, facingMode: "user" } });
       setCameraStream(stream);
       setTimeout(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
+        if (videoRef.current) videoRef.current.srcObject = stream;
       }, 50);
-    } catch (err) {
-      console.error(err);
-      setError("Failed to access camera. Please check permissions.");
+    } catch {
+      setError("Failed to access camera.");
       setShowCamera(false);
     }
   };
@@ -54,40 +54,24 @@ export default function Settings({ user, onUpdateUser }) {
     setShowCamera(false);
   };
 
-  const capturePhoto = () => {
-    if (!videoRef.current) return;
-    const canvas = document.createElement("canvas");
-    canvas.width = 320;
-    canvas.height = 320;
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(videoRef.current, 0, 0, 320, 320);
-    const dataUrl = canvas.toDataURL("image/jpeg");
-    setCapturedPhoto(dataUrl);
-    stopCamera();
-  };
-
   const handleEnrollFace = async () => {
-    if (!capturedPhoto) return;
+    if (!videoRef.current) return;
     setLoading(true);
     setError("");
     setSuccess("");
+    setScanProgress(0);
     try {
-      const response = await fetch(`${getBackendUrl()}/api/auth/wallet/save-settings`, {
+      await loadModels();
+      const descriptor = await captureEnrollment(videoRef.current, (p) => setScanProgress(p));
+      const response = await fetch(`${getBackendUrl()}/api/auth/wallet/face/enroll`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: user.email,
-          faceIdPhoto: capturedPhoto
-        })
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ faceTemplate: descriptor })
       });
-
-      if (!response.ok) {
-        throw new Error("Failed to enroll face profile.");
-      }
-
+      if (!response.ok) throw new Error("Failed to enroll face.");
       setSuccess("✓ Biometric Face ID enrolled successfully!");
       onUpdateUser({ ...user, hasFaceId: true });
-      setCapturedPhoto(null);
+      stopCamera();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -110,9 +94,8 @@ export default function Settings({ user, onUpdateUser }) {
     try {
       const response = await fetch(`${getBackendUrl()}/api/auth/wallet/save-settings`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
-          email: user.email,
           pin: pin || undefined,
           alternativeEmail: altEmail,
           alternativeMobile: altMobile
@@ -173,35 +156,25 @@ export default function Settings({ user, onUpdateUser }) {
               </div>
             )}
 
-            {capturedPhoto && !showCamera && (
-              <div style={{ position: "relative", width: "160px", height: "160px", borderRadius: "50%", overflow: "hidden", border: "3px solid var(--accent-primary)" }}>
-                <img src={capturedPhoto} alt="Captured" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            {scanProgress > 0 && (
+              <div className="auth-progress-bar" style={{ width: '80%', height: '4px', background: 'rgba(150,150,150,0.2)', borderRadius: '2px' }}>
+                <div style={{ width: `${scanProgress}%`, background: 'var(--accent-primary)', height: '100%', transition: 'width 0.3s ease' }} />
               </div>
             )}
 
             <div style={{ display: "flex", gap: "0.5rem" }}>
-              {!showCamera && !capturedPhoto && (
+              {!showCamera && (
                 <button type="button" className="auth-btn auth-btn-primary" onClick={startCamera} style={{ background: "var(--accent-primary)" }}>
                   📸 Enlist Face Camera
                 </button>
               )}
               {showCamera && (
                 <>
-                  <button type="button" className="auth-btn auth-btn-primary" onClick={capturePhoto} style={{ background: "var(--accent-emerald)" }}>
-                    Capture Reference Image
+                  <button type="button" className="auth-btn auth-btn-primary" onClick={handleEnrollFace} disabled={loading} style={{ background: "var(--accent-emerald)" }}>
+                    {loading ? "Capturing..." : "Start Enrollment"}
                   </button>
                   <button type="button" className="auth-btn auth-btn-ghost" onClick={stopCamera}>
                     Cancel
-                  </button>
-                </>
-              )}
-              {capturedPhoto && (
-                <>
-                  <button type="button" className="auth-btn auth-btn-primary" onClick={handleEnrollFace} disabled={loading} style={{ background: "var(--accent-primary)" }}>
-                    {loading ? "Enrolling..." : "💾 Save Enrolled Biometrics"}
-                  </button>
-                  <button type="button" className="auth-btn auth-btn-ghost" onClick={() => setCapturedPhoto(null)}>
-                    Retake
                   </button>
                 </>
               )}

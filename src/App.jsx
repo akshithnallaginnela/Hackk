@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import AuthScreen from "./components/AuthScreen";
 import Dashboard from "./components/Dashboard";
 import ProverWallet from "./components/ProverWallet";
@@ -7,22 +7,36 @@ import GeminiAssistant from "./components/GeminiAssistant";
 import ProofHistory from "./components/ProofHistory";
 import Settings from "./components/Settings";
 import TutorialWizard from "./components/TutorialWizard";
+import ClaimSelector from "./components/ClaimSelector";
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(true);
-  const [currentUser, setCurrentUser] = useState({ name: "Developer", email: "dev@zerovault.id" });
+  const [currentUser, setCurrentUser] = useState({
+    name: "Default Prover",
+    email: "prover@example.com"
+  });
   const [activePage, setActivePage] = useState("dashboard"); // dashboard | wallet | verifier | settings
+  const [showTutorial, setShowTutorial] = useState(false);
+
+  useEffect(() => {
+    const token = localStorage.getItem("zerovault_token");
+    const userEmail = localStorage.getItem("zerovault_user_email");
+    if (token && userEmail) {
+      setCurrentUser({ email: userEmail, name: "Default Prover" });
+    }
+  }, []);
 
   const handleLogin = (user) => {
     setCurrentUser(user);
     setIsLoggedIn(true);
+    if (user && user.email) {
+      localStorage.setItem("zerovault_user_email", user.email);
+    }
     setActivePage("dashboard");
   };
 
   const handleLogout = () => {
-    setIsLoggedIn(false);
-    setCurrentUser(null);
-    setActivePage("dashboard");
+    alert("Lock/Logout is disabled in open access mode.");
   };
 
   return (
